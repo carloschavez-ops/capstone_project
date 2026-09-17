@@ -1,20 +1,17 @@
 // ---------------------------------------------------------
-// Estado
+// Carta digital
+// Selección de pizzas, filtros y panel de resumen.
 // ---------------------------------------------------------
-let pizzaActualId = PIZZAS.length ? PIZZAS[0].id : null;
-let tamanoSeleccionadoId = null;
-let quesoSeleccionadoId = null;
-let toppingsSeleccionados = new Set();
 
-const filtrosDieta = new Set(); // dietas activas: 'vegano', 'sin_gluten', 'sin_lactosa'
+let pizzaActualId = null;
+let tamanoActual = "mediana";
+
+const filtrosDieta = new Set();
 let categoriaActiva = "todas";
 let textoBusqueda = "";
 
-// ---------------------------------------------------------
-// Utilidades
-// ---------------------------------------------------------
-function formatoSoles(valor) {
-  return "S/ " + valor.toFixed(2);
+function soles(valor) {
+  return "S/ " + Number(valor).toFixed(2);
 }
 
 function obtenerPizza(id) {
@@ -22,232 +19,155 @@ function obtenerPizza(id) {
 }
 
 // ---------------------------------------------------------
-// Render del panel personalizador
+// Panel de resumen
 // ---------------------------------------------------------
-function cargarPizzaEnPersonalizador(pizzaId) {
+function seleccionarPizza(pizzaId) {
   const pizza = obtenerPizza(pizzaId);
   if (!pizza) return;
 
   pizzaActualId = pizzaId;
-  const p = pizza.personalizacion;
 
-  // Preseleccionar: primer tamaño, queso incluido, y toppings marcados por defecto
-  tamanoSeleccionadoId = p.tamanos[0].id;
-  const quesoIncluido = p.quesos.find((q) => q.incluido);
-  quesoSeleccionadoId = quesoIncluido ? quesoIncluido.id : p.quesos[0].id;
-  toppingsSeleccionados = new Set(
-    p.toppings.filter((t) => t.defecto).map((t) => t.id)
-  );
+  document.getElementById("res-nombre").textContent = pizza.nombre;
+  document.getElementById("res-descripcion").textContent = pizza.descripcion;
+  document.getElementById("res-etiqueta").textContent = pizza.badge;
+  document.getElementById("link-personalizar").href = URL_PERSONALIZAR.replace("__ID__", pizza.id);
 
-  document.getElementById("pers-etiqueta").textContent = p.etiqueta;
-  document.getElementById("pers-nombre").textContent = pizza.nombre;
-  document.getElementById("pers-tiempo").textContent = "⏱ " + p.tiempo_horneado + " horneado";
-  document.getElementById("pers-kcal").textContent = "● " + p.kcal;
-
-  // Tamaños
-  const contTamanos = document.getElementById("pers-tamanos");
-  contTamanos.innerHTML = "";
-  p.tamanos.forEach((tam) => {
-    const div = document.createElement("label");
-    div.className = "opcion-tamano";
-    div.innerHTML = `
-      <input type="radio" name="tamano" value="${tam.id}" ${tam.id === tamanoSeleccionadoId ? "checked" : ""}>
+  // Tamaños disponibles con su precio real
+  const cont = document.getElementById("res-tamanos");
+  cont.innerHTML = "";
+  TAMANOS.forEach((t) => {
+    const label = document.createElement("label");
+    label.className = "opcion-tamano" + (t.id === tamanoActual ? " activo" : "");
+    label.innerHTML = `
+      <input type="radio" name="tamano-res" value="${t.id}" ${t.id === tamanoActual ? "checked" : ""}>
       <div>
-        <strong>${tam.nombre}</strong>
-        <span class="desc-tamano">${tam.desc}</span>
-        <span class="precio-tamano">${tam.extra > 0 ? "+" + formatoSoles(tam.extra) : formatoSoles(tam.precio)}</span>
-      </div>
-    `;
-    div.querySelector("input").addEventListener("change", () => {
-      tamanoSeleccionadoId = tam.id;
-      actualizarResumen();
+        <strong>${t.nombre}</strong>
+        <span class="desc-tamano">${t.desc}</span>
+        <span class="precio-tamano">${soles(pizza.precios[t.id])}</span>
+      </div>`;
+    label.querySelector("input").addEventListener("change", () => {
+      tamanoActual = t.id;
+      seleccionarPizza(pizzaActualId);
     });
-    contTamanos.appendChild(div);
+    cont.appendChild(label);
   });
 
-  // Insumos base (protegidos, no editables)
-  const contInsumos = document.getElementById("pers-insumos");
-  contInsumos.innerHTML = "";
-  p.insumos_base.forEach((ins) => {
-    const div = document.createElement("div");
-    div.className = "fila-insumo";
-    div.innerHTML = `
-      <span>🔒 ${ins.nombre}</span>
-      <span class="detalle-insumo">${ins.detalle}</span>
-    `;
-    contInsumos.appendChild(div);
-  });
-
-  // Quesos (radio)
-  const contQuesos = document.getElementById("pers-quesos");
-  contQuesos.innerHTML = "";
-  p.quesos.forEach((q) => {
-    const div = document.createElement("label");
-    div.className = "fila-opcion-radio";
-    div.innerHTML = `
-      <span class="radio-texto">
-        <input type="radio" name="queso" value="${q.id}" ${q.id === quesoSeleccionadoId ? "checked" : ""}>
-        ${q.nombre}
-      </span>
-      <span class="precio-opcion">${q.incluido ? "Incluido" : "+" + formatoSoles(q.extra)}</span>
-    `;
-    div.querySelector("input").addEventListener("change", () => {
-      quesoSeleccionadoId = q.id;
-      actualizarResumen();
-    });
-    contQuesos.appendChild(div);
-  });
-
-  // Toppings (checkbox)
-  const contToppings = document.getElementById("pers-toppings");
-  contToppings.innerHTML = "";
-  p.toppings.forEach((t) => {
-    const div = document.createElement("label");
-    div.className = "fila-opcion-check";
-    div.innerHTML = `
-      <span class="check-texto">
-        <input type="checkbox" value="${t.id}" ${toppingsSeleccionados.has(t.id) ? "checked" : ""}>
-        ${t.nombre}
-      </span>
-      <span class="precio-opcion">+${formatoSoles(t.extra)}</span>
-    `;
-    div.querySelector("input").addEventListener("change", (e) => {
-      if (e.target.checked) {
-        toppingsSeleccionados.add(t.id);
-      } else {
-        toppingsSeleccionados.delete(t.id);
-      }
-      actualizarResumen();
-    });
-    contToppings.appendChild(div);
-  });
-
-  actualizarResumen();
-  marcarTarjetaActiva(pizzaId);
-}
-
-// ---------------------------------------------------------
-// Cálculo y render del total
-// ---------------------------------------------------------
-function actualizarResumen() {
-  const pizza = obtenerPizza(pizzaActualId);
-  if (!pizza) return;
-  const p = pizza.personalizacion;
-
-  const tamano = p.tamanos.find((t) => t.id === tamanoSeleccionadoId) || p.tamanos[0];
-  const queso = p.quesos.find((q) => q.id === quesoSeleccionadoId) || p.quesos[0];
-  const toppingsElegidos = p.toppings.filter((t) => toppingsSeleccionados.has(t.id));
-
-  let total = tamano.precio;
-  const filas = [];
-  filas.push({ etiqueta: `Base ${pizza.nombre.split(" ")[0]} ${tamano.nombre.split(" ")[1] || ""}:`, valor: tamano.precio });
-
-  if (!queso.incluido) {
-    total += queso.extra;
-    filas.push({ etiqueta: `Extra ${queso.nombre}:`, valor: queso.extra, extra: true });
-  }
-
-  toppingsElegidos.forEach((t) => {
-    total += t.extra;
-    filas.push({ etiqueta: `Extra ${t.nombre}:`, valor: t.extra, extra: true });
-  });
-
-  const contDesglose = document.getElementById("pers-desglose");
-  contDesglose.innerHTML = filas
+  // Ingredientes de la receta
+  document.getElementById("res-ingredientes").innerHTML = pizza.receta
     .map(
-      (f) => `
-      <div class="fila-desglose">
-        <span>${f.etiqueta}</span>
-        <span>${f.extra ? "+" : ""}${formatoSoles(f.valor)}</span>
+      (i) => `<div class="fila-receta">
+        <span>${i.emoji} ${i.nombre}</span>
+        <span class="precio-incluido">Incluido</span>
       </div>`
     )
     .join("");
 
-  document.getElementById("pers-total").innerHTML = formatoSoles(total);
-  document.getElementById("pers-total-boton").textContent = formatoSoles(total);
+  marcarTarjetaActiva(pizzaId);
+  cotizar(pizza);
 }
 
-// ---------------------------------------------------------
-// Marcar visualmente la tarjeta que se está editando
-// ---------------------------------------------------------
+function cotizar(pizza) {
+  fetch("/api/cotizar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      pizza_id: pizza.id,
+      tamano_id: tamanoActual,
+      ingredientes: pizza.ingredientes,
+    }),
+  })
+    .then((r) => r.json())
+    .then((datos) => {
+      document.getElementById("res-desglose").innerHTML = datos.desglose
+        .map(
+          (f) => `<div class="fila-desglose">
+            <span>${f.etiqueta}</span><span>${soles(f.valor)}</span>
+          </div>`
+        )
+        .join("");
+      document.getElementById("res-total").textContent = soles(datos.total);
+      document.getElementById("res-total-boton").textContent = soles(datos.total);
+      document.getElementById("res-tiempo").textContent = `⏱ ${datos.minutos} min de horno`;
+      document.getElementById("res-kcal").textContent = `${datos.kcal} kcal aprox.`;
+      document.getElementById("btn-agregar-carrito").disabled = false;
+    });
+}
+
 function marcarTarjetaActiva(pizzaId) {
   document.querySelectorAll(".tarjeta-pizza").forEach((tarjeta) => {
-    const metaSpan = tarjeta.querySelector(".meta-pizza");
-    if (tarjeta.dataset.id === pizzaId) {
-      tarjeta.classList.add("tarjeta-activa");
-      metaSpan.textContent = "🔴 Editando en panel interactivo";
-    } else {
-      tarjeta.classList.remove("tarjeta-activa");
-      metaSpan.textContent = metaSpan.dataset.metaDefault;
-    }
+    const meta = tarjeta.querySelector(".meta-pizza");
+    const activa = tarjeta.dataset.id === pizzaId;
+    tarjeta.classList.toggle("tarjeta-activa", activa);
+    meta.textContent = activa ? "Seleccionada · mírala en el panel" : meta.dataset.metaDefault;
   });
 }
 
 // ---------------------------------------------------------
-// Agregar al carrito (llama al backend Flask)
+// Agregar al carrito directo desde la carta
 // ---------------------------------------------------------
 function agregarAlCarrito() {
   const pizza = obtenerPizza(pizzaActualId);
   if (!pizza) return;
 
-  const totalTexto = document.getElementById("pers-total-boton").textContent.replace("S/", "").trim();
-  const total = parseFloat(totalTexto);
-
-  const payload = {
-    pizza_id: pizzaActualId,
-    tamano_id: tamanoSeleccionadoId,
-    queso_id: quesoSeleccionadoId,
-    toppings: Array.from(toppingsSeleccionados),
-    total: total,
-  };
-
   const boton = document.getElementById("btn-agregar-carrito");
   const textoOriginal = boton.innerHTML;
   boton.disabled = true;
-  boton.innerHTML = "Agregando...";
+  boton.innerHTML = "Agregando…";
 
   fetch("/carrito/agregar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      pizza_id: pizza.id,
+      tamano_id: tamanoActual,
+      ingredientes: pizza.ingredientes,
+      cantidad: 1,
+      nombre: pizza.nombre,
+    }),
   })
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.cantidad !== undefined) {
-        document.getElementById("contador-carrito").textContent = data.cantidad;
+    .then((r) => r.json())
+    .then((datos) => {
+      if (datos.cantidad !== undefined) {
+        document.getElementById("contador-carrito").textContent = datos.cantidad;
       }
-      boton.innerHTML = "✅ Añadida al carrito";
+      boton.innerHTML = "Agregada al carrito";
       setTimeout(() => {
         boton.innerHTML = textoOriginal;
         boton.disabled = false;
       }, 1400);
     })
     .catch(() => {
-      boton.innerHTML = "Error, intenta de nuevo";
+      boton.innerHTML = "No se pudo agregar, intenta de nuevo";
       setTimeout(() => {
         boton.innerHTML = textoOriginal;
         boton.disabled = false;
-      }, 1400);
+      }, 1600);
     });
 }
 
 // ---------------------------------------------------------
-// Filtros: categoría, búsqueda y dieta
+// Filtros
 // ---------------------------------------------------------
+function aCamel(str) {
+  return str.replace(/_([a-z])/g, (m, c) => c.toUpperCase());
+}
+
 function aplicarFiltros() {
   let visibles = 0;
+
   document.querySelectorAll(".tarjeta-pizza").forEach((tarjeta) => {
-    const coincideCategoria = categoriaActiva === "todas" || tarjeta.dataset.categoria === categoriaActiva;
+    const coincideCategoria =
+      categoriaActiva === "todas" || tarjeta.dataset.categoria === categoriaActiva;
+
     const coincideTexto =
       textoBusqueda === "" ||
       tarjeta.dataset.nombre.includes(textoBusqueda) ||
-      tarjeta.dataset.descripcion.includes(textoBusqueda);
+      tarjeta.dataset.descripcion.includes(textoBusqueda) ||
+      tarjeta.dataset.ingredientes.includes(textoBusqueda);
 
     let coincideDieta = true;
     filtrosDieta.forEach((d) => {
-      if (tarjeta.dataset[toCamel(d)] !== "si") {
-        coincideDieta = false;
-      }
+      if (tarjeta.dataset[aCamel(d)] !== "si") coincideDieta = false;
     });
 
     const visible = coincideCategoria && coincideTexto && coincideDieta;
@@ -258,28 +178,28 @@ function aplicarFiltros() {
   document.getElementById("sin-resultados").style.display = visibles === 0 ? "block" : "none";
 }
 
-function toCamel(str) {
-  return str.replace(/_([a-z])/g, (m, c) => c.toUpperCase());
-}
-
 // ---------------------------------------------------------
-// Listeners generales
+// Eventos
 // ---------------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
-  // Botones "Personalizar Receta"
-  document.querySelectorAll(".btn-personalizar").forEach((btn) => {
-    btn.addEventListener("click", () => cargarPizzaEnPersonalizador(btn.dataset.id));
+  // Toda la tarjeta selecciona la pizza (menos el enlace de personalizar)
+  document.querySelectorAll(".tarjeta-pizza").forEach((tarjeta) => {
+    tarjeta.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return;
+      seleccionarPizza(tarjeta.dataset.id);
+    });
+    tarjeta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        seleccionarPizza(tarjeta.dataset.id);
+      }
+    });
   });
 
-  // Cargar la primera pizza al abrir la página
-  if (pizzaActualId) {
-    cargarPizzaEnPersonalizador(pizzaActualId);
-  }
+  if (PIZZAS.length) seleccionarPizza(PIZZAS[0].id);
 
-  // Botón agregar al carrito
   document.getElementById("btn-agregar-carrito").addEventListener("click", agregarAlCarrito);
 
-  // Tabs de categoría
   document.querySelectorAll(".tab-categoria").forEach((tab) => {
     tab.addEventListener("click", () => {
       document.querySelectorAll(".tab-categoria").forEach((t) => t.classList.remove("activo"));
@@ -289,13 +209,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Buscador
   document.getElementById("buscador-input").addEventListener("input", (e) => {
     textoBusqueda = e.target.value.trim().toLowerCase();
     aplicarFiltros();
   });
 
-  // Chips de dieta
   document.querySelectorAll(".chip-dieta").forEach((chip) => {
     chip.addEventListener("click", () => {
       const dieta = chip.dataset.dieta;

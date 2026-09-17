@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pizza Pronto — Pedido enviado</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/extra.css') }}">
+</head>
+<body>
+
+  {% include "navbar.html" %}
+
+  <div class="vacio-carrito">
+    <span class="emoji-vacio">✅</span>
+    <h2>Tu pedido ya está en el horno</h2>
+    <p class="codigo-pedido">Código {{ pedido.codigo }}</p>
+
+    <div class="resumen-confirmacion">
+      <div class="fila-desglose">
+        <span>Pizzas</span><span>{{ pedido.unidades }}</span>
+      </div>
+      <div class="fila-desglose">
+        <span>Método de pago</span>
+        <span>{% if pedido.metodo == 'efectivo' %}Efectivo{% elif pedido.metodo == 'yape' %}Yape / Plin{% else %}Tarjeta{% endif %}</span>
+      </div>
+      <div class="fila-total">
+        <span>Total pagado</span>
+        <span class="valor-total">{{ pedido.total | soles }}</span>
+      </div>
+      {% if pedido.vuelto is not none %}
+      <div class="caja-vuelto">
+        <span>El repartidor lleva tu vuelto</span>
+        <strong>{{ pedido.vuelto | soles }}</strong>
+      </div>
+      {% endif %}
+
+      {% if pedido.cliente %}
+      <div class="caja-datos-entrega" style="margin-top:16px;">
+        <span class="etiqueta-datos">Entregar a</span>
+        <p class="nombre-cliente">{{ pedido.cliente.nombre }} · {{ pedido.cliente.telefono }}</p>
+        <p class="modo-entrega">
+          {% if pedido.cliente.tipo_entrega == 'domicilio' %}
+            🛵 Delivery a domicilio{% if pedido.cliente.direccion %} · {{ pedido.cliente.direccion }}{% endif %}
+          {% elif pedido.cliente.tipo_entrega == 'mesa' %}
+            🍽️ En el local{% if pedido.cliente.mesa %} · {{ pedido.cliente.mesa }}{% endif %}
+          {% else %}
+            🏪 Recojo en tienda
+          {% endif %}
+        </p>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="acciones-vacio">
+      <a href="{{ url_for('carta') }}" class="btn-secundario">Volver a la carta</a>
+      <a href="{{ url_for('crear_mi_pizza') }}" class="btn-secundario">Crear otra pizza</a>
+    </div>
+  </div>
+
+</body>
+</html>

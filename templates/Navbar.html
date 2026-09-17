@@ -1,0 +1,26 @@
+<nav class="navbar">
+  <a class="marca" href="{{ url_for('carta') }}">
+    <span class="logo-cuadro"></span>
+    PIZZA PRONTO
+  </a>
+  <div class="nav-links">
+    <a href="{{ url_for('carta') }}" class="pill {{ 'activo' if request.endpoint == 'carta' }}">Carta</a>
+    <a href="{{ url_for('crear_mi_pizza') }}" class="pill {{ 'activo' if request.endpoint == 'crear_mi_pizza' }}">Crear mi pizza</a>
+    {% if not invitado %}
+    <a href="{{ url_for('agregar_pizza') }}" class="pill {{ 'activo' if request.endpoint == 'agregar_pizza' }}">Agregar pizza al menú</a>
+    {% endif %}
+  </div>
+  <div class="zona-derecha-nav">
+    {% if invitado %}
+    <a href="{{ url_for('datos_invitado', siguiente=request.path) }}" class="pill-invitado">
+      {% if datos_cliente %}👤 {{ datos_cliente.nombre }} · Editar datos{% else %}👤 Completa tus datos{% endif %}
+    </a>
+    {% else %}
+    <a href="{{ url_for('logout') }}" class="pill-invitado">{{ email }} · Salir</a>
+    {% endif %}
+    <a href="{{ url_for('ver_carrito') }}" class="carrito">
+      🛍️ Carrito
+      <span class="badge" id="contador-carrito">{{ items_carrito or 0 }}</span>
+    </a>
+  </div>
+</nav>

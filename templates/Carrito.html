@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pizza Pronto — Tu pedido</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/extra.css') }}">
+</head>
+<body>
+
+  {% include "navbar.html" %}
+
+  <header class="cabecera-carta">
+    <div>
+      <p class="eyebrow-carta">Revisa antes de enviarlo a cocina</p>
+      <h1>Tu pedido</h1>
+    </div>
+    {% if carrito %}
+    <form method="POST" action="{{ url_for('vaciar_carrito') }}">
+      <button type="submit" class="btn-texto">Vaciar carrito</button>
+    </form>
+    {% endif %}
+  </header>
+
+  {% with mensajes = get_flashed_messages() %}
+    {% if mensajes %}
+    <div class="contenedor-carrito"><div class="mensaje-error">{{ mensajes[0] }}</div></div>
+    {% endif %}
+  {% endwith %}
+
+  {% if not carrito %}
+  <div class="vacio-carrito">
+    <span class="emoji-vacio">🍕</span>
+    <h2>Todavía no hay nada en tu carrito</h2>
+    <p>Elige una pizza de la carta o arma la tuya desde cero.</p>
+    <div class="acciones-vacio">
+      <a href="{{ url_for('carta') }}" class="btn-secundario">Ver la carta</a>
+      <a href="{{ url_for('crear_mi_pizza') }}" class="btn-secundario">Crear mi pizza</a>
+    </div>
+  </div>
+  {% else %}
+
+  <div class="contenedor-carrito">
+
+    <div class="lista-lineas">
+      {% for item in carrito %}
+      <article class="linea-carrito">
+        <div class="disco-linea">🍕</div>
+
+        <div class="cuerpo-linea">
+          <div class="fila-titulo-linea">
+            <h3>{{ item.nombre }}</h3>
+            <span class="precio-linea">{{ (item.precio_unitario * item.cantidad) | soles }}</span>
+          </div>
+
+          <p class="meta-linea">
+            {{ item.tamano_nombre }}
+            {% if item.origen == 'creada' %}· Creada por ti{% elif item.origen == 'modificada' %}· Receta modificada{% else %}· Receta de la carta{% endif %}
+            · {{ item.kcal }} kcal aprox.
+          </p>
+
+          <ul class="lista-ingredientes-linea">
+            {% for ing in item.ingredientes %}
+            <li>
+              <span>{{ ing.emoji }} {{ ing.nombre }}</span>
+              <span class="{{ 'precio-incluido' if ing.incluido else 'precio-extra' }}">
+                {% if ing.incluido %}Incluido{% else %}+ {{ ing.precio | soles }}{% endif %}
+              </span>
+            </li>
+            {% endfor %}
+          </ul>
+
+          {% if item.quitados %}
+          <p class="quitados-linea">
+            Sin: {% for q in item.quitados %}{{ q.nombre }}{% if not loop.last %}, {% endif %}{% endfor %}
+          </p>
+          {% endif %}
+
+          <div class="pie-linea">
+            <div class="stepper-carrito">
+              <form method="POST" action="{{ url_for('cambiar_cantidad') }}">
+                <input type="hidden" name="linea" value="{{ item.linea }}">
+                <input type="hidden" name="accion" value="restar">
+                <button type="submit" aria-label="Quitar una unidad">−</button>
+              </form>
+              <span>{{ item.cantidad }}</span>
+              <form method="POST" action="{{ url_for('cambiar_cantidad') }}">
+                <input type="hidden" name="linea" value="{{ item.linea }}">
+                <input type="hidden" name="accion" value="sumar">
+                <button type="submit" aria-label="Agregar una unidad">+</button>
+              </form>
+            </div>
+
+            <span class="unitario-linea">{{ item.precio_unitario | soles }} c/u</span>
+
+            <div class="acciones-linea">
+              {% if item.pizza_id %}
+              <a href="{{ url_for('personalizar', pizza_id=item.pizza_id) }}">Cambiar ingredientes</a>
+              {% else %}
+              <a href="{{ url_for('crear_mi_pizza') }}">Armar otra igual</a>
+              {% endif %}
+              <form method="POST" action="{{ url_for('eliminar_del_carrito') }}">
+                <input type="hidden" name="linea" value="{{ item.linea }}">
+                <button type="submit" class="btn-texto">Quitar</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+
+      <a href="{{ url_for('carta') }}" class="agregar-mas">+ Agregar otra pizza al pedido</a>
+    </div>
+
+    <!-- ============ Resumen y pago ============ -->
+    <aside class="panel-pago">
+      <h2>Resumen del pedido</h2>
+
+      {% if datos_cliente %}
+      <div class="caja-datos-entrega">
+        <div class="fila-datos-entrega">
+          <span class="etiqueta-datos">Entregar a</span>
+          <a href="{{ url_for('datos_invitado', siguiente=request.path) }}">Editar</a>
+        </div>
+        <p class="nombre-cliente">{{ datos_cliente.nombre }} · {{ datos_cliente.telefono }}</p>
+        <p class="modo-entrega">
+          {% if datos_cliente.tipo_entrega == 'domicilio' %}
+            🛵 Delivery a domicilio{% if datos_cliente.direccion %} · {{ datos_cliente.direccion }}{% endif %}
+          {% elif datos_cliente.tipo_entrega == 'mesa' %}
+            🍽️ En el local{% if datos_cliente.mesa %} · {{ datos_cliente.mesa }}{% endif %}
+          {% else %}
+            🏪 Recojo en tienda
+          {% endif %}
+        </p>
+      </div>
+      {% endif %}
+
+      <div class="filas-desglose">
+        <div class="fila-desglose">
+          <span>Subtotal ({{ resumen.unidades }} {{ 'pizza' if resumen.unidades == 1 else 'pizzas' }})</span>
+          <span>{{ resumen.subtotal | soles }}</span>
+        </div>
+        <div class="fila-desglose">
+          <span>Delivery</span>
+          <span>{% if resumen.delivery == 0 %}Gratis{% else %}{{ resumen.delivery | soles }}{% endif %}</span>
+        </div>
+      </div>
+
+      {% if resumen.falta_para_envio_gratis > 0 %}
+      <p class="aviso-envio">
+        Te faltan {{ resumen.falta_para_envio_gratis | soles }} para que el delivery salga gratis.
+      </p>
+      {% endif %}
+
+      <div class="fila-total">
+        <span>Total a pagar</span>
+        <span class="valor-total" id="total-pedido" data-total="{{ resumen.total }}">{{ resumen.total | soles }}</span>
+      </div>
+
+      <form method="POST" action="{{ url_for('confirmar_pedido') }}" id="form-pago">
+        <h3 class="titulo-pago">¿Cómo vas a pagar?</h3>
+        <div class="metodos-pago">
+          <label class="metodo activo">
+            <input type="radio" name="metodo_pago" value="efectivo" checked>
+            <span>💵 Efectivo</span>
+          </label>
+          <label class="metodo">
+            <input type="radio" name="metodo_pago" value="yape">
+            <span>📱 Yape / Plin</span>
+          </label>
+          <label class="metodo">
+            <input type="radio" name="metodo_pago" value="tarjeta">
+            <span>💳 Tarjeta</span>
+          </label>
+        </div>
+
+        <div id="bloque-efectivo">
+          <h3 class="titulo-pago">¿Con cuánto vas a pagar?</h3>
+          <p class="ayuda-form">Así el repartidor sale con tu vuelto listo.</p>
+
+          <div class="chips-billete">
+            <button type="button" class="chip-billete" data-monto="20">S/ 20</button>
+            <button type="button" class="chip-billete" data-monto="50">S/ 50</button>
+            <button type="button" class="chip-billete" data-monto="100">S/ 100</button>
+            <button type="button" class="chip-billete" data-monto="200">S/ 200</button>
+            <button type="button" class="chip-billete" id="chip-exacto">Pago exacto</button>
+          </div>
+
+          <div class="input-con-icono">
+            <span class="icono">S/</span>
+            <input type="number" step="0.10" min="0" name="paga_con" id="paga-con" placeholder="0.00">
+          </div>
+
+          <div class="caja-vuelto" id="caja-vuelto">
+            <span>Tu vuelto</span>
+            <strong id="monto-vuelto">S/ 0.00</strong>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primario" style="margin-top:20px;">
+          Enviar pedido a cocina
+        </button>
+      </form>
+    </aside>
+  </div>
+  {% endif %}
+
+  <script src="{{ url_for('static', filename='js/carrito.js') }}"></script>
+</body>
+</html>

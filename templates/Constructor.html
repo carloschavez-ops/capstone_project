@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pizza Pronto — {{ titulo }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/extra.css') }}">
+</head>
+<body>
+
+  {% include "navbar.html" %}
+
+  <header class="cabecera-carta">
+    <div>
+      <p class="eyebrow-carta">
+        {% if modo == 'crear' %}Arma tu receta ingrediente por ingrediente{% else %}Receta de la carta, ajustada a tu gusto{% endif %}
+      </p>
+      <h1>{{ titulo }}</h1>
+      <p class="bajada-constructor">{{ bajada }}</p>
+    </div>
+    <a href="{{ url_for('carta') }}" class="pill-volver">← Volver a la carta</a>
+  </header>
+
+  <div class="grid-constructor">
+
+    <!-- ============ Columna izquierda: el formulario ============ -->
+    <div class="col-ingredientes">
+
+      <section class="bloque-constructor">
+        <div class="cabecera-bloque">
+          <h2>Nombre de tu pizza</h2>
+          <span class="ayuda-bloque">Así aparecerá en el pedido</span>
+        </div>
+        <div class="input-con-icono">
+          <span class="icono">🍕</span>
+          <input type="text" id="nombre-pizza" value="{{ nombre_sugerido }}" maxlength="45">
+        </div>
+      </section>
+
+      <section class="bloque-constructor">
+        <div class="cabecera-bloque">
+          <h2>Tamaño</h2>
+          <span class="ayuda-bloque">Cambia el precio de la base y de cada extra</span>
+        </div>
+        <div class="rejilla-tamanos">
+          {% for t in tamanos %}
+          <label class="tarjeta-tamano {{ 'activo' if t.id == tamano_inicial }}">
+            <input type="radio" name="tamano" value="{{ t.id }}" {{ 'checked' if t.id == tamano_inicial }}>
+            <strong>{{ t.nombre }}</strong>
+            <span class="desc-tamano">{{ t.desc }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </section>
+
+      {% for grupo, items in grupos %}
+      <section class="bloque-constructor" data-grupo="{{ grupo.id }}">
+        <div class="cabecera-bloque">
+          <h2>{{ grupo.nombre }}</h2>
+          <span class="ayuda-bloque">{{ grupo.ayuda }}</span>
+        </div>
+        <div class="rejilla-ingredientes">
+          {% for ing in items %}
+          <label class="tarjeta-ing" data-id="{{ ing.id }}" data-grupo="{{ grupo.id }}">
+            <input type="{{ 'radio' if grupo.seleccion == 'unica' else 'checkbox' }}"
+                   name="ing-{{ grupo.id }}" value="{{ ing.id }}"
+                   {{ 'checked' if ing.id in seleccion_inicial }}>
+            <span class="emoji-ing">{{ ing.emoji }}</span>
+            <span class="nombre-ing">{{ ing.nombre }}</span>
+            <span class="precio-ing" data-precio="{{ ing.precio }}">
+              {% if ing.precio == 0 %}Sin costo{% else %}+ S/ {{ "%.2f"|format(ing.precio) }}{% endif %}
+            </span>
+            <span class="motivo-bloqueo"></span>
+          </label>
+          {% endfor %}
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+
+    <!-- ============ Columna derecha: vista previa y total ============ -->
+    <aside class="col-preview">
+      <div class="panel-preview">
+
+        <div class="lienzo-pizza">
+          <svg id="dibujo-pizza" viewBox="0 0 320 320" role="img"
+               aria-label="Vista previa de tu pizza"></svg>
+        </div>
+        <p class="pie-preview" id="pie-preview">Así se vería tu pizza al salir del horno</p>
+
+        <div class="etiquetas-dieta" id="etiquetas-dieta"></div>
+
+        <div id="avisos" class="zona-avisos"></div>
+
+        <div id="tarjeta-similar" class="tarjeta-similar" hidden>
+          <p class="titulo-similar">Ya tenemos una parecida</p>
+          <h3 id="similar-nombre"></h3>
+          <p class="coincidencia" id="similar-coincidencia"></p>
+          <p class="detalle-similar" id="similar-detalle"></p>
+          <div class="acciones-similar">
+            <a href="#" id="similar-usar" class="btn-secundario">Quiero esa pizza</a>
+            <button type="button" id="similar-seguir" class="btn-texto">Seguir con la mía</button>
+          </div>
+        </div>
+
+        <div class="resumen-total">
+          <div id="desglose" class="filas-desglose"></div>
+          <div class="fila-total">
+            <span>Total</span>
+            <span id="total" class="valor-total">S/ 0.00</span>
+          </div>
+          <div class="meta-total">
+            <span id="tiempo-horno">⏱ 8 min de horno</span>
+            <span id="kcal">0 kcal aprox.</span>
+          </div>
+        </div>
+
+        <div class="fila-cantidad">
+          <span>Cantidad</span>
+          <div class="stepper">
+            <button type="button" id="menos">−</button>
+            <span id="cantidad">1</span>
+            <button type="button" id="mas">+</button>
+          </div>
+        </div>
+
+        <button id="btn-agregar" class="btn-primario">
+          Agregar al carrito · <span id="total-boton">S/ 0.00</span>
+        </button>
+        <p class="nota-pie" id="nota-agregar"></p>
+      </div>
+    </aside>
+
+  </div>
+
+  <script>
+    const INGREDIENTES = {{ ingredientes_json | safe }};
+    const TAMANOS = {{ tamanos_json | safe }};
+    const GRUPOS = {{ grupos_json | safe }};
+    const MODO = "{{ modo }}";
+    const PIZZA_ID = {{ (pizza.id if pizza else None) | tojson }};
+    const SELECCION_INICIAL = {{ seleccion_inicial | tojson }};
+    const TAMANO_INICIAL = "{{ tamano_inicial }}";
+    const URL_PERSONALIZAR = "{{ url_for('personalizar', pizza_id='__ID__') }}";
+    const URL_CARRITO = "{{ url_for('ver_carrito') }}";
+  </script>
+  <script src="{{ url_for('static', filename='js/constructor.js') }}"></script>
+
+</body>
+</html>

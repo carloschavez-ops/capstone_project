@@ -5,52 +5,29 @@
   <title>Pizza Pronto — Carta Digital</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/extra.css') }}">
 </head>
 <body>
 
-  <nav class="navbar">
-    <div class="marca">
-      <span class="logo-cuadro"></span>
-      PIZZA PRONTO
-    </div>
-    <div class="nav-links">
-      <span class="pill">📍 Entrega en: Domicilio actual ▾</span>
-      <span class="pill activo">Carta Digital</span>
-      <span class="pill">Crear mi Pizza</span>
-      {% if not invitado %}
-      <a href="{{ url_for('agregar_pizza') }}" class="pill">➕ Agregar Pizza</a>
-      {% endif %}
-      <span class="pill">Mis Pedidos / En Vivo</span>
-      <span class="pill">Club Pronto</span>
-    </div>
-    <div style="display:flex; align-items:center; gap:14px;">
-      {% if invitado %}
-      <a href="{{ url_for('login') }}" class="pill-invitado">👤 Modo invitado · Iniciar sesión</a>
-      {% else %}
-      <a href="{{ url_for('logout') }}" class="pill-invitado">{{ email }} · Salir</a>
-      {% endif %}
-      <div class="carrito">🛍️ Carrito <span class="badge" id="contador-carrito">{{ session.get('carrito', []) | length }}</span></div>
-      <div class="avatar">🙂</div>
-    </div>
-  </nav>
+  {% include "navbar.html" %}
 
   <header class="cabecera-carta">
     <div>
-      <p class="eyebrow-carta">🟢 COCINA NAPOLITANA AUTÉNTICA · D.O.P &amp; AVPN</p>
-      <h1>Carta Digital &amp; Modificación de Recetas</h1>
+      <p class="eyebrow-carta">Cocina napolitana · horno de piedra a 450 °C</p>
+      <h1>Carta digital</h1>
     </div>
     <div class="tarjeta-horno">
-      <span>🧭</span>
+      <span>🔥</span>
       <div>
-        <strong>HORNOS DE PIEDRA</strong>
-        <div>450°C · 90 Seg</div>
+        <strong>Horno de piedra</strong>
+        <div>450 °C · 90 segundos</div>
       </div>
     </div>
   </header>
 
   <div class="barra-filtros">
     <div class="tabs-categoria">
-      <button class="tab-categoria activo" data-categoria="todas">Todas las Pizzas</button>
+      <button class="tab-categoria activo" data-categoria="todas">Todas</button>
       <button class="tab-categoria" data-categoria="tradicionales">Tradicionales</button>
       <button class="tab-categoria" data-categoria="premium">Premium</button>
       <button class="tab-categoria" data-categoria="veganas">Veganas</button>
@@ -58,13 +35,13 @@
     </div>
     <div class="buscador">
       <span>🔍</span>
-      <input type="text" id="buscador-input" placeholder="Buscar ingrediente...">
+      <input type="text" id="buscador-input" placeholder="Buscar por nombre o ingrediente">
     </div>
     <div class="chips-filtro">
-      <span class="etiqueta-filtro">FILTROS:</span>
+      <span class="etiqueta-filtro">Filtros</span>
       <button class="chip-dieta" data-dieta="vegano">Vegano</button>
-      <button class="chip-dieta" data-dieta="sin_gluten">Sin Gluten</button>
-      <button class="chip-dieta" data-dieta="sin_lactosa">Sin Lactosa</button>
+      <button class="chip-dieta" data-dieta="sin_gluten">Sin gluten</button>
+      <button class="chip-dieta" data-dieta="sin_lactosa">Sin lactosa</button>
     </div>
   </div>
 
@@ -73,9 +50,11 @@
     <!-- Columna izquierda: lista de pizzas -->
     <div id="lista-pizzas" class="lista-pizzas">
       {% for pizza in pizzas %}
-      <div class="tarjeta-pizza" data-id="{{ pizza.id }}" data-categoria="{{ pizza.categoria }}"
+      <article class="tarjeta-pizza" tabindex="0" role="button"
+           data-id="{{ pizza.id }}" data-categoria="{{ pizza.categoria }}"
            data-nombre="{{ pizza.nombre | lower }}"
            data-descripcion="{{ pizza.descripcion | lower }}"
+           data-ingredientes="{{ pizza.receta | map(attribute='nombre') | join(' ') | lower }}"
            data-vegano="{{ 'si' if pizza.dieta.vegano else 'no' }}"
            data-sin-gluten="{{ 'si' if pizza.dieta.sin_gluten else 'no' }}"
            data-sin-lactosa="{{ 'si' if pizza.dieta.sin_lactosa else 'no' }}">
@@ -88,7 +67,7 @@
         <div class="info-pizza">
           <div class="fila-badge-precio">
             <span class="badge-pizza badge-{{ pizza.badge_tipo }}">{{ pizza.badge }}</span>
-            <span class="precio-pizza">S/ {{ "%.2f"|format(pizza.precio_base) }}</span>
+            <span class="precio-pizza">Desde {{ pizza.precios.personal | soles }}</span>
           </div>
           <h3>{{ pizza.nombre }}</h3>
           <p class="descripcion-pizza">{{ pizza.descripcion }}</p>
@@ -97,73 +76,66 @@
             <span class="tag-pizza">{{ tag }}</span>
             {% endfor %}
           </div>
+          <p class="receta-mini">
+            {% for ing in pizza.receta %}{{ ing.emoji }} {{ ing.nombre }}{% if not loop.last %} · {% endif %}{% endfor %}
+          </p>
           <div class="fila-meta-boton">
             <span class="meta-pizza" data-meta-default="{{ pizza.meta }}">{{ pizza.meta }}</span>
-            <button class="btn-personalizar" data-id="{{ pizza.id }}">Personalizar Receta ⇄</button>
+            <a href="{{ url_for('personalizar', pizza_id=pizza.id) }}" class="btn-personalizar">Personalizar receta</a>
           </div>
         </div>
-      </div>
+      </article>
       {% endfor %}
 
       <p id="sin-resultados" class="sin-resultados" style="display:none;">
-        No encontramos pizzas que coincidan con tu búsqueda o filtros. Prueba con otro ingrediente.
+        Ninguna pizza coincide con lo que buscas. Prueba con otro ingrediente o quita un filtro.
       </p>
     </div>
 
-    <!-- Columna derecha: personalizador -->
-    <aside class="panel-personalizador">
+    <!-- Columna derecha: resumen de la pizza seleccionada -->
+    <aside class="panel-personalizador" id="panel-resumen">
       <div class="encabezado-personalizador">
-        <span class="etiqueta-verde">🍕 PERSONALIZADOR DE COCINA EN VIVO</span>
-        <span class="etiqueta-estandar" id="pers-etiqueta">Estándar AVPN</span>
+        <span class="etiqueta-verde">Pizza seleccionada</span>
+        <span class="etiqueta-estandar" id="res-etiqueta">Receta de la casa</span>
       </div>
-      <h2 id="pers-nombre">Margherita Verace D.O.P</h2>
+      <h2 id="res-nombre">Elige una pizza</h2>
+      <p class="descripcion-pizza" id="res-descripcion">Toca cualquier tarjeta de la izquierda para verla aquí.</p>
 
       <div class="bloque-personalizador">
-        <p class="titulo-bloque">1. Diámetro &amp; Porciones</p>
-        <div id="pers-tamanos" class="opciones-tamano"></div>
-      </div>
-
-      <div class="bloque-personalizador">
-        <div class="fila-titulo-icono">
-          <p class="titulo-bloque">INSUMOS BASE PROTEGIDOS</p>
-          <span class="nota-fijo">🔒 Fijo por Receta Oficial</span>
-        </div>
-        <div id="pers-insumos"></div>
+        <p class="titulo-bloque">Tamaño y porciones</p>
+        <div id="res-tamanos" class="opciones-tamano"></div>
       </div>
 
       <div class="bloque-personalizador">
-        <p class="titulo-bloque">SUSTITUCIONES &amp; MODIFICACIONES LIBRES</p>
-        <p class="subtitulo-opcion">Base de Queso Artesanal:</p>
-        <div id="pers-quesos" class="lista-opciones-radio"></div>
-      </div>
-
-      <div class="bloque-personalizador">
-        <p class="subtitulo-opcion">Toppings Extra de Cocina:</p>
-        <div id="pers-toppings" class="lista-opciones-check"></div>
+        <p class="titulo-bloque">Lo que lleva</p>
+        <div id="res-ingredientes" class="lista-receta"></div>
       </div>
 
       <div class="resumen-total">
-        <div id="pers-desglose" class="filas-desglose"></div>
+        <div id="res-desglose" class="filas-desglose"></div>
         <div class="fila-total">
-          <span>Total Receta:</span>
-          <span id="pers-total" class="valor-total">$0.00<br>USD</span>
+          <span>Total</span>
+          <span id="res-total" class="valor-total">S/ 0.00</span>
         </div>
         <div class="meta-total">
-          <span id="pers-tiempo">⏱ ~8 min horneado</span>
-          <span id="pers-kcal">● 840 kcal aprox</span>
+          <span id="res-tiempo">⏱ 8 min de horno</span>
+          <span id="res-kcal">840 kcal aprox.</span>
         </div>
       </div>
 
-      <button id="btn-agregar-carrito" class="btn-primario btn-agregar">
-        🛒 Agregar al Carrito &amp; Enviar (<span id="pers-total-boton">S/ 0.00</span>)
+      <button id="btn-agregar-carrito" class="btn-primario btn-agregar" disabled>
+        Agregar al carrito · <span id="res-total-boton">S/ 0.00</span>
       </button>
-      <p class="link-favorito">♡ Guardar como Mi Variante Favorita</p>
+      <a href="#" id="link-personalizar" class="link-favorito">Cambiar ingredientes de esta receta</a>
     </aside>
 
   </div>
 
   <script>
     const PIZZAS = {{ pizzas_json | safe }};
+    const INGREDIENTES = {{ ingredientes_json | safe }};
+    const TAMANOS = {{ tamanos | tojson | safe }};
+    const URL_PERSONALIZAR = "{{ url_for('personalizar', pizza_id='__ID__') }}";
   </script>
   <script src="{{ url_for('static', filename='js/carta.js') }}"></script>
 

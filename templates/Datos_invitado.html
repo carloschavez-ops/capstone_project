@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pizza Pronto — Datos de entrega</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/extra.css') }}">
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="marca">
+      <span class="logo-cuadro"></span>
+      PIZZA PRONTO
+    </div>
+    <a href="{{ url_for('logout') }}" class="pill-invitado">Salir del modo invitado</a>
+  </nav>
+
+  <div class="contenedor-datos-invitado">
+    <div class="panel panel-datos-invitado">
+      <span class="chip-verde">👤 Antes de ver la carta</span>
+      <h1>¿A quién le entregamos la pizza?</h1>
+      <p class="subtitulo">Con estos datos avisamos al repartidor o a cocina a quién buscar. Te toma 20 segundos.</p>
+
+      {% with mensajes = get_flashed_messages() %}
+        {% if mensajes %}
+          <div class="mensaje-error">{{ mensajes[0] }}</div>
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('datos_invitado') }}">
+        <input type="hidden" name="siguiente" value="{{ siguiente }}">
+
+        <div class="campo">
+          <label for="nombre">Tu nombre</label>
+          <div class="input-con-icono">
+            <span class="icono">🙂</span>
+            <input type="text" id="nombre" name="nombre" placeholder="Ej: Carlos Ramírez"
+                   value="{{ valores.get('nombre', '') }}" required>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="telefono">Teléfono de contacto</label>
+          <div class="input-con-icono">
+            <span class="icono">📱</span>
+            <input type="tel" id="telefono" name="telefono" placeholder="Ej: 987 654 321"
+                   value="{{ valores.get('telefono', '') }}" required>
+          </div>
+        </div>
+
+        <p class="subtitulo-opcion" style="margin-top:22px;">¿Cómo vas a recibir tu pedido?</p>
+        <div class="opciones-entrega">
+          <label class="opcion-entrega {{ 'activo' if valores.get('tipo_entrega', 'domicilio') == 'domicilio' }}">
+            <input type="radio" name="tipo_entrega" value="domicilio"
+                   {{ 'checked' if valores.get('tipo_entrega', 'domicilio') == 'domicilio' }}>
+            <span>🛵 Delivery a domicilio</span>
+          </label>
+          <label class="opcion-entrega {{ 'activo' if valores.get('tipo_entrega') == 'recojo' }}">
+            <input type="radio" name="tipo_entrega" value="recojo"
+                   {{ 'checked' if valores.get('tipo_entrega') == 'recojo' }}>
+            <span>🏪 Recojo en tienda</span>
+          </label>
+          <label class="opcion-entrega {{ 'activo' if valores.get('tipo_entrega') == 'mesa' }}">
+            <input type="radio" name="tipo_entrega" value="mesa"
+                   {{ 'checked' if valores.get('tipo_entrega') == 'mesa' }}>
+            <span>🍽️ Voy a comer aquí</span>
+          </label>
+        </div>
+
+        <div class="campo campo-condicional" id="campo-direccion">
+          <label for="direccion">Dirección de entrega</label>
+          <div class="input-con-icono">
+            <span class="icono">📍</span>
+            <input type="text" id="direccion" name="direccion" placeholder="Av. Ejemplo 123, referencia..."
+                   value="{{ valores.get('direccion', '') }}">
+          </div>
+        </div>
+
+        <div class="campo campo-condicional" id="campo-mesa" style="display:none;">
+          <label for="mesa">Número de mesa</label>
+          <div class="input-con-icono">
+            <span class="icono">🍽️</span>
+            <input type="text" id="mesa" name="mesa" placeholder="Ej: Mesa 4"
+                   value="{{ valores.get('mesa', '') }}">
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="dni_ruc">DNI o RUC <span class="opcional-label">(opcional, para tu boleta)</span></label>
+          <div class="input-con-icono">
+            <span class="icono">🧾</span>
+            <input type="text" id="dni_ruc" name="dni_ruc" placeholder="Solo si necesitas comprobante"
+                   value="{{ valores.get('dni_ruc', '') }}">
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primario" style="margin-top:10px;">
+          Continuar a la carta →
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/datos_invitado.js') }}"></script>
+</body>
+</html>
