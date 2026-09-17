@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pizza Pronto — Iniciar sesión</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="marca">
+      <span class="logo-cuadro"></span>
+      PIZZA PRONTO
+    </div>
+    <div class="nav-links">
+      <span class="pill">📍 Entrega en: Domicilio actual ▾</span>
+      <span class="pill activo">Carta Digital</span>
+      <span class="pill">Crear mi Pizza</span>
+      <span class="pill">Mis Pedidos / En Vivo</span>
+      <span class="pill">Club Pronto</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div class="carrito">🛍️ Carrito <span class="badge"></span></div>
+      <div class="avatar">🙂</div>
+    </div>
+  </nav>
+
+  <div class="contenedor-login">
+
+    <!-- Panel izquierdo: formulario de login -->
+    <div class="panel">
+      <div class="tabs">
+        <div class="tab activo">→ INICIAR SESIÓN</div>
+        <div class="tab">👤 REGISTRARSE</div>
+      </div>
+
+      <span class="chip-verde">🔥 AUTÉNTICO HORNO NAPOLITANO</span>
+      <h1>Bienvenido a PIZZA PRONTO</h1>
+      <p class="subtitulo">
+        Experiencia Forno &amp; Tradición • Accede para ordenar o sincronizar tus
+        creaciones culinarias de autor.
+      </p>
+
+      {% with mensajes = get_flashed_messages() %}
+        {% if mensajes %}
+          <div class="mensaje-error">
+            {{ mensajes[0] }}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('login') }}">
+        <div class="campo">
+          <label for="email">Correo electrónico o Teléfono móvil</label>
+          <div class="input-con-icono">
+            <span class="icono">✉️</span>
+            <input type="text" id="email" name="email" placeholder="marco.bellini@ejemplo.com" required>
+          </div>
+        </div>
+
+        <div class="campo">
+          <div class="fila-label">
+            <label for="password">Contraseña secreta</label>
+            <a href="#">¿Olvidaste tu contraseña?</a>
+          </div>
+          <div class="input-con-icono">
+            <span class="icono">🔒</span>
+            <input type="password" id="password" name="password" placeholder="••••••••••••" required>
+          </div>
+        </div>
+
+        <label class="check-recordar">
+          <input type="checkbox" name="recordar" checked>
+          Recordar mi sesión en este dispositivo
+        </label>
+
+        <button type="submit" class="btn-primario">
+          ACCEDER A MIS FAVORITOS →
+        </button>
+      </form>
+
+      <div class="separador">O CONTINUAR CON</div>
+
+      <div class="botones-sociales">
+        <div class="btn-social">🔴 Google</div>
+        <div class="btn-social">🍎 Apple</div>
+      </div>
+
+      <a href="{{ url_for('modo_invitado') }}" class="btn-invitado">
+        👀 Entrar en modo invitado (solo ver el menú)
+      </a>
+
+      <p class="texto-legal">
+        Al continuar, confirmas que aceptas nuestros <a href="#">Términos de Servicio Artesanal</a>
+        y la <a href="#">Política de Privacidad</a>.
+      </p>
+    </div>
+
+    <!-- Panel derecho: beneficios -->
+    <div>
+      <div class="panel">
+        <div class="encabezado-beneficios">
+          <span class="badge-membresia">🏅 MEMBRESÍA ARTESANAL GRATUITA</span>
+          <span class="etiqueta">CLUB PIZZA PRONTO</span>
+        </div>
+        <h2>Disfruta de la verdadera pizza italiana con beneficios creados para ti</h2>
+
+        <div class="tarjeta-beneficio">
+          <div class="icono-beneficio">🔖</div>
+          <div>
+            <h3>Guarda tus Creaciones &amp; Favoritos</h3>
+            <p>Reordena tus recetas personalizadas de masa con 72 horas de fermentación y toppings selectos con un solo clic.</p>
+          </div>
+        </div>
+
+        <div class="tarjeta-beneficio">
+          <div class="icono-beneficio">📖</div>
+          <div>
+            <h3>Histórico de Masa &amp; Recetas</h3>
+            <p>Accede a las fichas técnicas, niveles de hidratación y maridajes de vinos de la Toscana sugeridos por el Chef Marco.</p>
+          </div>
+        </div>
+
+        <div class="tarjeta-beneficio">
+          <div class="icono-beneficio">🌡️</div>
+          <div>
+            <h3>Rastreo Térmico GPS en Vivo</h3>
+            <p>Monitorea la temperatura exacta de tu horno móvil inteligente a 450°C y el minuto preciso de entrega a tu puerta.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="certificacion">
+        <div class="foto-horno">Hornos a 450°C</div>
+        <div>
+          <div class="sello">✅ CERTIFICACIÓN DE ORIGEN AVPN</div>
+          <blockquote>"Garantizamos harina tipo 00 italiana, tomate San Marzano D.O.P. y mozzarella di Bufala Campana en cada masa horneada."</blockquote>
+          <div class="firma">Associazione Verace Pizza Napoletana · Sello Oficial #842</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

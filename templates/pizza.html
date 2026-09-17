@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pizza Pronto — Agregar Pizza al Menú</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="marca">
+      <span class="logo-cuadro"></span>
+      PIZZA PRONTO
+    </div>
+    <div class="nav-links">
+      <a href="{{ url_for('carta') }}" class="pill">← Volver a la Carta</a>
+      <span class="pill activo">Agregar Pizza</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div class="avatar">🙂</div>
+    </div>
+  </nav>
+
+  <div class="contenedor-form-pizza">
+    <div class="panel panel-form-pizza">
+      <span class="chip-verde">🍕 NUEVO PLATO DEL MENÚ</span>
+      <h1>Agregar Pizza al Menú</h1>
+      <p class="subtitulo">Completa los datos y la pizza aparecerá en la Carta Digital para tus clientes.</p>
+
+      {% with mensajes = get_flashed_messages() %}
+        {% if mensajes %}
+          <div class="mensaje-error">{{ mensajes[0] }}</div>
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('agregar_pizza') }}" enctype="multipart/form-data">
+
+        <!-- 1. Datos básicos -->
+        <h2 class="titulo-seccion-form">1. Datos Básicos de la Pizza</h2>
+
+        <div class="campo">
+          <label for="nombre">Nombre de la pizza</label>
+          <div class="input-con-icono">
+            <span class="icono">🍕</span>
+            <input type="text" id="nombre" name="nombre" placeholder="Ej: Pizza Suprema de la Casa"
+                   value="{{ valores.get('nombre', '') }}" required>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="descripcion">Descripción</label>
+          <textarea id="descripcion" name="descripcion" rows="3"
+                    placeholder="Ej: Exquisita combinación de pepperoni, carne molida, pimientos verdes y cebolla caramelizada.">{{ valores.get('descripcion', '') }}</textarea>
+        </div>
+
+        <div class="campo">
+          <label for="categoria">Categoría</label>
+          <select id="categoria" name="categoria">
+            <option value="tradicionales" {{ "selected" if valores.get('categoria') == "tradicionales" }}>Tradicionales</option>
+            <option value="premium" {{ "selected" if valores.get('categoria') == "premium" }}>Premium</option>
+            <option value="veganas" {{ "selected" if valores.get('categoria') == "veganas" }}>Veganas</option>
+            <option value="dulces" {{ "selected" if valores.get('categoria') == "dulces" }}>Dulces</option>
+          </select>
+        </div>
+
+        <!-- 2. Precios y tamaños -->
+        <h2 class="titulo-seccion-form">2. Precios por Tamaño (en soles)</h2>
+        <p class="ayuda-form">Deja en blanco Mediana o Familiar si por ahora usarán el mismo precio que Personal.</p>
+
+        <div class="fila-precios">
+          <div class="campo">
+            <label for="precio_personal">Precio Personal</label>
+            <div class="input-con-icono">
+              <span class="icono">S/</span>
+              <input type="number" step="0.10" min="0" id="precio_personal" name="precio_personal"
+                     placeholder="15.00" value="{{ valores.get('precio_personal', '') }}" required>
+            </div>
+          </div>
+          <div class="campo">
+            <label for="precio_mediana">Precio Mediana</label>
+            <div class="input-con-icono">
+              <span class="icono">S/</span>
+              <input type="number" step="0.10" min="0" id="precio_mediana" name="precio_mediana"
+                     placeholder="22.00" value="{{ valores.get('precio_mediana', '') }}">
+            </div>
+          </div>
+          <div class="campo">
+            <label for="precio_familiar">Precio Familiar</label>
+            <div class="input-con-icono">
+              <span class="icono">S/</span>
+              <input type="number" step="0.10" min="0" id="precio_familiar" name="precio_familiar"
+                     placeholder="29.00" value="{{ valores.get('precio_familiar', '') }}">
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Gestión visual y de inventario -->
+        <h2 class="titulo-seccion-form">3. Gestión Visual y de Inventario</h2>
+
+        <div class="campo">
+          <label for="imagen">Imagen del producto</label>
+          <input type="file" id="imagen" name="imagen" accept=".png,.jpg,.jpeg,.webp,.gif" class="input-archivo">
+          <p class="ayuda-form">Si no subes una foto, se mostrará un ícono de pizza mientras la agregas después.</p>
+        </div>
+
+        <label class="fila-switch">
+          <input type="checkbox" name="activa" checked>
+          <span class="switch-visual"></span>
+          <span>Activa (disponible para la venta ahora mismo)</span>
+        </label>
+
+        <p class="subtitulo-opcion" style="margin-top:20px;">Etiquetas especiales</p>
+        <div class="grupo-checks">
+          <label class="fila-check-simple">
+            <input type="checkbox" name="picante">
+            🌶️ ¿Es picante?
+          </label>
+          <label class="fila-check-simple">
+            <input type="checkbox" name="vegetariana">
+            🥦 ¿Es vegetariana?
+          </label>
+          <label class="fila-check-simple">
+            <input type="checkbox" name="recomendada">
+            ⭐ ¿Es una recomendación del chef?
+          </label>
+        </div>
+
+        <button type="submit" class="btn-primario" style="margin-top:28px;">
+          Guardar Pizza en el Menú →
+        </button>
+      </form>
+    </div>
+  </div>
+
+</body>
+</html>

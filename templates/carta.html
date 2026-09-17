@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pizza Pronto — Carta Digital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="marca">
+      <span class="logo-cuadro"></span>
+      PIZZA PRONTO
+    </div>
+    <div class="nav-links">
+      <span class="pill">📍 Entrega en: Domicilio actual ▾</span>
+      <span class="pill activo">Carta Digital</span>
+      <span class="pill">Crear mi Pizza</span>
+      {% if not invitado %}
+      <a href="{{ url_for('agregar_pizza') }}" class="pill">➕ Agregar Pizza</a>
+      {% endif %}
+      <span class="pill">Mis Pedidos / En Vivo</span>
+      <span class="pill">Club Pronto</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:14px;">
+      {% if invitado %}
+      <a href="{{ url_for('login') }}" class="pill-invitado">👤 Modo invitado · Iniciar sesión</a>
+      {% else %}
+      <a href="{{ url_for('logout') }}" class="pill-invitado">{{ email }} · Salir</a>
+      {% endif %}
+      <div class="carrito">🛍️ Carrito <span class="badge" id="contador-carrito">{{ session.get('carrito', []) | length }}</span></div>
+      <div class="avatar">🙂</div>
+    </div>
+  </nav>
+
+  <header class="cabecera-carta">
+    <div>
+      <p class="eyebrow-carta">🟢 COCINA NAPOLITANA AUTÉNTICA · D.O.P &amp; AVPN</p>
+      <h1>Carta Digital &amp; Modificación de Recetas</h1>
+    </div>
+    <div class="tarjeta-horno">
+      <span>🧭</span>
+      <div>
+        <strong>HORNOS DE PIEDRA</strong>
+        <div>450°C · 90 Seg</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="barra-filtros">
+    <div class="tabs-categoria">
+      <button class="tab-categoria activo" data-categoria="todas">Todas las Pizzas</button>
+      <button class="tab-categoria" data-categoria="tradicionales">Tradicionales</button>
+      <button class="tab-categoria" data-categoria="premium">Premium</button>
+      <button class="tab-categoria" data-categoria="veganas">Veganas</button>
+      <button class="tab-categoria" data-categoria="dulces">Dulces</button>
+    </div>
+    <div class="buscador">
+      <span>🔍</span>
+      <input type="text" id="buscador-input" placeholder="Buscar ingrediente...">
+    </div>
+    <div class="chips-filtro">
+      <span class="etiqueta-filtro">FILTROS:</span>
+      <button class="chip-dieta" data-dieta="vegano">Vegano</button>
+      <button class="chip-dieta" data-dieta="sin_gluten">Sin Gluten</button>
+      <button class="chip-dieta" data-dieta="sin_lactosa">Sin Lactosa</button>
+    </div>
+  </div>
+
+  <div class="contenedor-carta">
+
+    <!-- Columna izquierda: lista de pizzas -->
+    <div id="lista-pizzas" class="lista-pizzas">
+      {% for pizza in pizzas %}
+      <div class="tarjeta-pizza" data-id="{{ pizza.id }}" data-categoria="{{ pizza.categoria }}"
+           data-nombre="{{ pizza.nombre | lower }}"
+           data-descripcion="{{ pizza.descripcion | lower }}"
+           data-vegano="{{ 'si' if pizza.dieta.vegano else 'no' }}"
+           data-sin-gluten="{{ 'si' if pizza.dieta.sin_gluten else 'no' }}"
+           data-sin-lactosa="{{ 'si' if pizza.dieta.sin_lactosa else 'no' }}">
+        <div class="franja-tarjeta"></div>
+        {% if pizza.imagen %}
+        <img src="{{ pizza.imagen }}" alt="{{ pizza.nombre }}" class="foto-pizza">
+        {% else %}
+        <div class="foto-pizza foto-placeholder">🍕</div>
+        {% endif %}
+        <div class="info-pizza">
+          <div class="fila-badge-precio">
+            <span class="badge-pizza badge-{{ pizza.badge_tipo }}">{{ pizza.badge }}</span>
+            <span class="precio-pizza">S/ {{ "%.2f"|format(pizza.precio_base) }}</span>
+          </div>
+          <h3>{{ pizza.nombre }}</h3>
+          <p class="descripcion-pizza">{{ pizza.descripcion }}</p>
+          <div class="tags-pizza">
+            {% for tag in pizza.tags %}
+            <span class="tag-pizza">{{ tag }}</span>
+            {% endfor %}
+          </div>
+          <div class="fila-meta-boton">
+            <span class="meta-pizza" data-meta-default="{{ pizza.meta }}">{{ pizza.meta }}</span>
+            <button class="btn-personalizar" data-id="{{ pizza.id }}">Personalizar Receta ⇄</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+      <p id="sin-resultados" class="sin-resultados" style="display:none;">
+        No encontramos pizzas que coincidan con tu búsqueda o filtros. Prueba con otro ingrediente.
+      </p>
+    </div>
+
+    <!-- Columna derecha: personalizador -->
+    <aside class="panel-personalizador">
+      <div class="encabezado-personalizador">
+        <span class="etiqueta-verde">🍕 PERSONALIZADOR DE COCINA EN VIVO</span>
+        <span class="etiqueta-estandar" id="pers-etiqueta">Estándar AVPN</span>
+      </div>
+      <h2 id="pers-nombre">Margherita Verace D.O.P</h2>
+
+      <div class="bloque-personalizador">
+        <p class="titulo-bloque">1. Diámetro &amp; Porciones</p>
+        <div id="pers-tamanos" class="opciones-tamano"></div>
+      </div>
+
+      <div class="bloque-personalizador">
+        <div class="fila-titulo-icono">
+          <p class="titulo-bloque">INSUMOS BASE PROTEGIDOS</p>
+          <span class="nota-fijo">🔒 Fijo por Receta Oficial</span>
+        </div>
+        <div id="pers-insumos"></div>
+      </div>
+
+      <div class="bloque-personalizador">
+        <p class="titulo-bloque">SUSTITUCIONES &amp; MODIFICACIONES LIBRES</p>
+        <p class="subtitulo-opcion">Base de Queso Artesanal:</p>
+        <div id="pers-quesos" class="lista-opciones-radio"></div>
+      </div>
+
+      <div class="bloque-personalizador">
+        <p class="subtitulo-opcion">Toppings Extra de Cocina:</p>
+        <div id="pers-toppings" class="lista-opciones-check"></div>
+      </div>
+
+      <div class="resumen-total">
+        <div id="pers-desglose" class="filas-desglose"></div>
+        <div class="fila-total">
+          <span>Total Receta:</span>
+          <span id="pers-total" class="valor-total">$0.00<br>USD</span>
+        </div>
+        <div class="meta-total">
+          <span id="pers-tiempo">⏱ ~8 min horneado</span>
+          <span id="pers-kcal">● 840 kcal aprox</span>
+        </div>
+      </div>
+
+      <button id="btn-agregar-carrito" class="btn-primario btn-agregar">
+        🛒 Agregar al Carrito &amp; Enviar (<span id="pers-total-boton">S/ 0.00</span>)
+      </button>
+      <p class="link-favorito">♡ Guardar como Mi Variante Favorita</p>
+    </aside>
+
+  </div>
+
+  <script>
+    const PIZZAS = {{ pizzas_json | safe }};
+  </script>
+  <script src="{{ url_for('static', filename='js/carta.js') }}"></script>
+
+</body>
+</html>
