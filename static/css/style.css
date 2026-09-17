@@ -1177,3 +1177,19 @@ select:focus {
   font-size: 14px;
   cursor: pointer;
 }
+.avisos-carta { max-width: 1500px; margin: 20px auto 0; padding: 0 40px; }
+
+.barra-admin {
+  max-width: 1500px;
+  margin: 18px auto 0;
+  padding: 16px 24px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: #fff;
+  border: 1px dashed var(--borde-suave);
+  border-radius: 14px;
+}
+.barra-admin p { margin: 0; flex: 1; font-size: 13px; color: var(--texto-secundario); }
+.btn-admin-principal { background: var(--rojo-pronto); color: #fff; border-color: var(--rojo-pronto); }
+
+.foto-actual { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.foto-actual img { width: 110px; height: 110px; object-fit: cover; border-radius: 12px; flex-shrink: 0; }

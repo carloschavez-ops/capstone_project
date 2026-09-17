@@ -23,6 +23,9 @@ USUARIO_VALIDO = {
     "password": "pizzapronto"
 }
 
+# Usuarios que se registran ellos mismos. Nunca son administradores.
+USUARIOS_REGISTRADOS = {}  # correo -> {"nombre": ..., "password": ...}
+
 # --- Configuración para subir fotos de pizzas ---
 CARPETA_SUBIDAS = os.path.join(app.root_path, "static", "img", "uploads")
 os.makedirs(CARPETA_SUBIDAS, exist_ok=True)
@@ -77,6 +80,8 @@ def contexto_base():
     """Datos que aparecen en la navbar de todas las páginas."""
     return {
         "email": session.get("email"),
+        "nombre_cliente": session.get("nombre"),
+        "es_admin": bool(session.get("es_admin")),
         "invitado": bool(session.get("invitado")) and not session.get("logueado"),
         "items_carrito": sum(i["cantidad"] for i in _leer_carrito()),
         "datos_cliente": session.get("datos_cliente"),
@@ -85,7 +90,7 @@ def contexto_base():
 
 # Páginas a las que un invitado puede entrar aunque todavía no haya
 # completado sus datos de entrega (si no, nunca podría llegar a llenarlos).
-RUTAS_SIN_DATOS_INVITADO = {"login", "logout", "modo_invitado", "datos_invitado", "static", "index"}
+RUTAS_SIN_DATOS_INVITADO = {"login", "registrarse", "logout", "modo_invitado", "datos_invitado", "static", "index"}
 
 
 @app.before_request
@@ -125,16 +130,68 @@ def login():
 
         if email == USUARIO_VALIDO["email"] and password == USUARIO_VALIDO["password"]:
             session["logueado"] = True
+            session["es_admin"] = True
             session["invitado"] = False
             session["email"] = email
+            session["nombre"] = "Administrador"
             session.permanent = bool(recordar)
             session.setdefault("carrito", [])
             return redirect(url_for("carta"))
-        else:
-            flash("Correo o contraseña incorrectos. Intenta de nuevo.")
-            return redirect(url_for("login"))
 
-    return render_template("login.html")
+        usuario = USUARIOS_REGISTRADOS.get(email)
+        if usuario and usuario["password"] == password:
+            session["logueado"] = True
+            session["es_admin"] = False
+            session["invitado"] = False
+            session["email"] = email
+            session["nombre"] = usuario["nombre"]
+            session.permanent = bool(recordar)
+            session.setdefault("carrito", [])
+            return redirect(url_for("carta"))
+
+        flash("Correo o contraseña incorrectos. Intenta de nuevo.")
+        return redirect(url_for("login"))
+
+    return render_template("login.html", modo="login", valores={}, **contexto_base())
+
+
+@app.route("/registrarse", methods=["GET", "POST"])
+def registrarse():
+    if request.method == "POST":
+        nombre = request.form.get("nombre", "").strip()
+        correo = request.form.get("correo", "").strip().lower()
+        contrasena = request.form.get("contrasena", "")
+        confirmar = request.form.get("confirmar_contrasena", "")
+
+        error = None
+        if not nombre:
+            error = "Escribe tu nombre."
+        elif not correo or "@" not in correo:
+            error = "Escribe un correo electrónico válido."
+        elif len(contrasena) < 4:
+            error = "La contraseña debe tener al menos 4 caracteres."
+        elif contrasena != confirmar:
+            error = "Las contraseñas no coinciden."
+        elif correo == USUARIO_VALIDO["email"] or correo in USUARIOS_REGISTRADOS:
+            error = "Ya existe una cuenta con ese correo."
+
+        if error:
+            flash(error)
+            return render_template("login.html", modo="registro", valores=request.form, **contexto_base())
+
+        # Se guarda como usuario normal. Jamás como administrador.
+        USUARIOS_REGISTRADOS[correo] = {"nombre": nombre, "password": contrasena}
+
+        session["logueado"] = True
+        session["es_admin"] = False
+        session["invitado"] = False
+        session["email"] = correo
+        session["nombre"] = nombre
+        session.setdefault("carrito", [])
+
+        return redirect(url_for("carta"))
+
+    return render_template("login.html", modo="registro", valores={}, **contexto_base())
 
 
 @app.route("/invitado")
@@ -209,11 +266,10 @@ def carta():
     if not puede_ver_carta():
         return redirect(url_for("login"))
 
-    pizzas_visibles = [p for p in PIZZAS if p.get("activo", True)]
-
+    admin = bool(session.get("es_admin"))
+    pizzas_visibles = list(PIZZAS) if admin else [p for p in PIZZAS if p.get("activo", True)]
     # Para cada pizza mandamos su receta ya "traducida" a nombres legibles.
-    for p in pizzas_visibles:
-        p["receta"] = [obtener_ingrediente(i) for i in p["ingredientes"] if obtener_ingrediente(i)]
+    
 
     return render_template(
         "carta.html",
@@ -473,108 +529,211 @@ def pedido_confirmado():
 
 
 # ---------------------------------------------------------
-# Agregar una pizza nueva al menú (solo usuarios con sesión iniciada)
 # ---------------------------------------------------------
-@app.route("/agregar-pizza", methods=["GET", "POST"])
-def agregar_pizza():
-    if not session.get("logueado"):
-        flash("Inicia sesión para poder agregar pizzas al menú.")
-        return redirect(url_for("login"))
+# Administración del menú (solo la cuenta administradora)
+# ---------------------------------------------------------
+CATEGORIAS_VALIDAS = {"tradicionales", "premium", "veganas", "dulces"}
 
-    if request.method == "POST":
-        nombre = request.form.get("nombre", "").strip()
-        descripcion = request.form.get("descripcion", "").strip()
-        categoria = request.form.get("categoria", "tradicionales")
 
-        def a_float(campo):
-            valor = request.form.get(campo, "").strip().replace(",", ".")
-            try:
-                return float(valor) if valor else 0.0
-            except ValueError:
-                return None
+def _guardar_imagen(archivo):
+    """Guarda la foto subida y devuelve su URL, o None si no subieron nada válido."""
+    if archivo and archivo.filename and extension_valida(archivo.filename):
+        nombre_archivo = secure_filename(f"{uuid.uuid4().hex[:8]}_{archivo.filename}")
+        archivo.save(os.path.join(CARPETA_SUBIDAS, nombre_archivo))
+        return f"/static/img/uploads/{nombre_archivo}"
+    return None
 
-        precio_personal = a_float("precio_personal")
-        precio_mediana = a_float("precio_mediana")
-        precio_familiar = a_float("precio_familiar")
 
-        if precio_personal is None or precio_mediana is None or precio_familiar is None:
-            flash("Los precios deben ser números válidos, por ejemplo 18.50.")
-            return render_template("agregar_pizza.html", valores=request.form, **contexto_base())
+def _leer_formulario_pizza(pizza=None):
+    """
+    Lee y valida el formulario de pizza. Devuelve (datos, error).
+    Si viene `pizza`, estamos editando: se conserva su receta y su foto
+    cuando el admin no sube una nueva.
+    """
+    form = request.form
+    nombre = form.get("nombre", "").strip()
+    descripcion = form.get("descripcion", "").strip()
+    categoria = form.get("categoria", "tradicionales")
+    if categoria not in CATEGORIAS_VALIDAS:
+        categoria = "tradicionales"
 
-        if not nombre or precio_personal <= 0:
-            flash("Escribe al menos el nombre de la pizza y el Precio Personal.")
-            return render_template("agregar_pizza.html", valores=request.form, **contexto_base())
+    def a_float(campo):
+        valor = form.get(campo, "").strip().replace(",", ".")
+        try:
+            return float(valor) if valor else 0.0
+        except ValueError:
+            return None
 
-        precio_mediana = precio_mediana or round(precio_personal * 1.35, 2)
-        precio_familiar = precio_familiar or round(precio_mediana * 1.25, 2)
+    precio_personal = a_float("precio_personal")
+    precio_mediana = a_float("precio_mediana")
+    precio_familiar = a_float("precio_familiar")
 
-        # --- Imagen (opcional) ---
-        imagen_url = None
-        archivo = request.files.get("imagen")
-        if archivo and archivo.filename and extension_valida(archivo.filename):
-            nombre_archivo = secure_filename(f"{uuid.uuid4().hex[:8]}_{archivo.filename}")
-            archivo.save(os.path.join(CARPETA_SUBIDAS, nombre_archivo))
-            imagen_url = f"/static/img/uploads/{nombre_archivo}"
+    if precio_personal is None or precio_mediana is None or precio_familiar is None:
+        return None, "Los precios deben ser números válidos, por ejemplo 18.50."
+    if not nombre:
+        return None, "Escribe el nombre de la pizza."
+    if precio_personal <= 0:
+        return None, "El Precio Personal tiene que ser mayor que cero."
 
-        # --- Etiquetas especiales ---
-        es_picante = request.form.get("picante") == "on"
-        es_vegetariana = request.form.get("vegetariana") == "on"
-        es_recomendada = request.form.get("recomendada") == "on"
-        activa = request.form.get("activa") == "on"
+    precio_mediana = precio_mediana or round(precio_personal * 1.35, 2)
+    precio_familiar = precio_familiar or round(precio_mediana * 1.25, 2)
 
-        tags = []
-        if es_picante:
-            tags.append("🌶️ Picante")
-        if es_vegetariana:
-            tags.append("🥦 Vegetariana")
-        if es_recomendada:
-            tags.append("⭐ Recomendación del chef")
+    es_picante = form.get("picante") == "on"
+    es_vegetariana = form.get("vegetariana") == "on"
+    es_recomendada = form.get("recomendada") == "on"
+    activa = form.get("activa") == "on"
 
-        if es_recomendada:
-            badge, badge_tipo = "Recomendación del Chef", "autor"
-        elif es_picante:
-            badge, badge_tipo = "Picante", "picante"
-        else:
-            badge, badge_tipo = "Nueva en la carta", "dop"
+    tags = []
+    if es_picante:
+        tags.append("🌶️ Picante")
+    if es_vegetariana:
+        tags.append("🥦 Vegetariana")
+    if es_recomendada:
+        tags.append("⭐ Recomendación del chef")
 
-        # Receta de partida. El dueño puede afinarla después desde "Personalizar".
+    if es_recomendada:
+        badge, badge_tipo = "Recomendación del Chef", "autor"
+    elif es_picante:
+        badge, badge_tipo = "Picante", "picante"
+    elif pizza:
+        badge, badge_tipo = pizza.get("badge", "Clásica"), pizza.get("badge_tipo", "dop")
+    else:
+        badge, badge_tipo = "Nueva en la carta", "dop"
+
+    # La receta solo se genera al crear. Al editar se respeta la que ya tiene,
+    # porque el dueño la afina desde "Personalizar".
+    if pizza:
+        receta = list(pizza["ingredientes"])
+    else:
         receta = ["masa_clasica", "salsa_tomate"]
         receta.append("queso_vegano" if es_vegetariana else "mozzarella")
         if es_picante:
             receta.append("jalapeno")
 
-        nueva_pizza = {
-            "id": generar_id(nombre),
-            "categoria": categoria,
-            "badge": badge,
-            "badge_tipo": badge_tipo,
-            "nombre": nombre,
-            "descripcion": descripcion or "Pizza artesanal preparada con ingredientes frescos del día.",
-            "tags": tags,
-            "precios": {
-                "personal": precio_personal,
-                "mediana": precio_mediana,
-                "familiar": precio_familiar,
-            },
-            "precio_base": precio_personal,
-            "ingredientes": receta,
-            "dieta": calcular_dieta(receta),
-            "meta": "Recién agregada",
-            "activo": activa,
-            "imagen": imagen_url,
-        }
+    # Imagen: nueva > la que ya tenía > ninguna
+    imagen = _guardar_imagen(request.files.get("imagen"))
+    if imagen is None and pizza:
+        imagen = None if form.get("quitar_imagen") == "on" else pizza.get("imagen")
 
+    datos = {
+        "categoria": categoria,
+        "badge": badge,
+        "badge_tipo": badge_tipo,
+        "nombre": nombre,
+        "descripcion": descripcion or "Pizza artesanal preparada con ingredientes frescos del día.",
+        "tags": tags,
+        "precios": {
+            "personal": precio_personal,
+            "mediana": precio_mediana,
+            "familiar": precio_familiar,
+        },
+        "precio_base": precio_personal,
+        "ingredientes": receta,
+        "dieta": calcular_dieta(receta),
+        "activo": activa,
+        "imagen": imagen,
+    }
+    return datos, None
+
+
+def _valores_desde_pizza(p):
+    """Convierte una pizza guardada en los valores que espera el formulario."""
+    tags = " ".join(p.get("tags", []))
+    return {
+        "nombre": p["nombre"],
+        "descripcion": p["descripcion"],
+        "categoria": p["categoria"],
+        "precio_personal": p["precios"]["personal"],
+        "precio_mediana": p["precios"]["mediana"],
+        "precio_familiar": p["precios"]["familiar"],
+        "picante": "on" if "Picante" in tags else "",
+        "vegetariana": "on" if "Vegetariana" in tags else "",
+        "recomendada": "on" if "Recomendación" in tags else "",
+        "activa": "on" if p.get("activo", True) else "",
+    }
+
+
+@app.route("/agregar-pizza", methods=["GET", "POST"])
+def agregar_pizza():
+    if not session.get("es_admin"):
+        flash("Esta opción es solo para el equipo de Pizza Pronto.")
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        datos, error = _leer_formulario_pizza()
+        if error:
+            flash(error)
+            return render_template("agregar_pizza.html", modo="crear", pizza=None,
+                                   accion=url_for("agregar_pizza"),
+                                   valores=request.form, **contexto_base())
+
+        nueva_pizza = {"id": generar_id(datos["nombre"]), "meta": "Recién agregada", **datos}
         PIZZAS.append(nueva_pizza)
 
-        if activa:
-            flash(f'"{nombre}" ya aparece en la carta. Entra a Personalizar para ajustar su receta.')
+        if datos["activo"]:
+            flash(f'"{datos["nombre"]}" ya aparece en la carta. Entra a Personalizar para ajustar su receta.')
         else:
-            flash(f'"{nombre}" quedó guardada como inactiva. Actívala cuando quieras venderla.')
-
+            flash(f'"{datos["nombre"]}" quedó guardada como inactiva. Actívala cuando quieras venderla.')
         return redirect(url_for("carta"))
 
-    return render_template("agregar_pizza.html", valores={}, **contexto_base())
+    return render_template("agregar_pizza.html", modo="crear", pizza=None,
+                           accion=url_for("agregar_pizza"),
+                           valores={"activa": "on"}, **contexto_base())
 
+
+@app.route("/editar-pizza/<pizza_id>", methods=["GET", "POST"])
+def editar_pizza(pizza_id):
+    if not session.get("es_admin"):
+        flash("Esta opción es solo para el equipo de Pizza Pronto.")
+        return redirect(url_for("login"))
+
+    pizza = obtener_pizza(pizza_id)
+    if not pizza:
+        flash("Esa pizza ya no existe en el menú.")
+        return redirect(url_for("carta"))
+
+    if request.method == "POST":
+        datos, error = _leer_formulario_pizza(pizza)
+        if error:
+            flash(error)
+            return render_template("agregar_pizza.html", modo="editar", pizza=pizza,
+                                   accion=url_for("editar_pizza", pizza_id=pizza_id),
+                                   valores=request.form, **contexto_base())
+
+        pizza.update(datos)          # el id y la receta se mantienen
+        pizza["meta"] = "Actualizada recién"
+        flash(f'Guardamos los cambios de "{pizza["nombre"]}".')
+        return redirect(url_for("carta"))
+
+    return render_template("agregar_pizza.html", modo="editar", pizza=pizza,
+                           accion=url_for("editar_pizza", pizza_id=pizza_id),
+                           valores=_valores_desde_pizza(pizza), **contexto_base())
+
+
+@app.route("/pizza/<pizza_id>/alternar", methods=["POST"])
+def alternar_pizza(pizza_id):
+    """Muestra u oculta una pizza de la carta sin borrarla."""
+    if not session.get("es_admin"):
+        return redirect(url_for("login"))
+
+    pizza = obtener_pizza(pizza_id)
+    if pizza:
+        pizza["activo"] = not pizza.get("activo", True)
+        estado = "visible en la carta" if pizza["activo"] else "oculta"
+        flash(f'"{pizza["nombre"]}" quedó {estado}.')
+    return redirect(url_for("carta"))
+
+
+@app.route("/pizza/<pizza_id>/eliminar", methods=["POST"])
+def eliminar_pizza(pizza_id):
+    if not session.get("es_admin"):
+        return redirect(url_for("login"))
+
+    pizza = obtener_pizza(pizza_id)
+    if pizza:
+        PIZZAS.remove(pizza)
+        flash(f'Eliminamos "{pizza["nombre"]}" del menú.')
+    return redirect(url_for("carta"))
 
 if __name__ == "__main__":
     app.run(debug=True)

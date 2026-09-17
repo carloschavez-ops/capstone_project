@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Pizza Pronto — Agregar Pizza al Menú</title>
+  <title>Pizza Pronto — {{ "Editar Pizza" if modo == "editar" else "Agregar Pizza al Menú" }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/extra.css') }}">
@@ -13,9 +13,21 @@
 
   <div class="contenedor-form-pizza">
     <div class="panel panel-form-pizza">
-      <span class="chip-verde">🍕 NUEVO PLATO DEL MENÚ</span>
-      <h1>Agregar Pizza al Menú</h1>
-      <p class="subtitulo">Completa los datos y la pizza aparecerá en la Carta Digital para tus clientes.</p>
+
+      <span class="chip-verde">
+        {{ "✏️ EDITAR PLATO DEL MENÚ" if modo == "editar" else "🍕 NUEVO PLATO DEL MENÚ" }}
+      </span>
+
+      <h1>{{ "Editar " ~ pizza.nombre if modo == "editar" else "Agregar Pizza al Menú" }}</h1>
+
+      <p class="subtitulo">
+        {% if modo == "editar" %}
+          Cambia lo que necesites y guarda. Los ingredientes de la receta se ajustan
+          desde “Personalizar receta” en la carta.
+        {% else %}
+          Completa los datos y la pizza aparecerá en la Carta Digital para tus clientes.
+        {% endif %}
+      </p>
 
       {% with mensajes = get_flashed_messages() %}
         {% if mensajes %}
@@ -23,7 +35,7 @@
         {% endif %}
       {% endwith %}
 
-      <form method="POST" action="{{ url_for('agregar_pizza') }}" enctype="multipart/form-data">
+      <form method="POST" action="{{ accion }}" enctype="multipart/form-data">
 
         <!-- 1. Datos básicos -->
         <h2 class="titulo-seccion-form">1. Datos Básicos de la Pizza</h2>
@@ -55,7 +67,7 @@
 
         <!-- 2. Precios y tamaños -->
         <h2 class="titulo-seccion-form">2. Precios por Tamaño (en soles)</h2>
-        <p class="ayuda-form">Deja en blanco Mediana o Familiar si por ahora usarán el mismo precio que Personal.</p>
+        <p class="ayuda-form">Deja en blanco Mediana o Familiar si quieres que se calculen solas a partir del precio Personal.</p>
 
         <div class="fila-precios">
           <div class="campo">
@@ -89,12 +101,32 @@
 
         <div class="campo">
           <label for="imagen">Imagen del producto</label>
+
+          {% if modo == "editar" and pizza.imagen %}
+            <div class="foto-actual">
+              <img src="{{ pizza.imagen }}" alt="{{ pizza.nombre }}">
+              <div>
+                <p class="ayuda-form" style="margin:0 0 8px;">Foto actual de la pizza.</p>
+                <label class="fila-check-simple">
+                  <input type="checkbox" name="quitar_imagen">
+                  🗑 Quitar la foto y dejar el ícono
+                </label>
+              </div>
+            </div>
+          {% endif %}
+
           <input type="file" id="imagen" name="imagen" accept=".png,.jpg,.jpeg,.webp,.gif" class="input-archivo">
-          <p class="ayuda-form">Si no subes una foto, se mostrará un ícono de pizza mientras la agregas después.</p>
+          <p class="ayuda-form">
+            {% if modo == "editar" %}
+              Si no subes una foto nueva, se mantiene la que ya tiene.
+            {% else %}
+              Si no subes una foto, se mostrará un ícono de pizza mientras la agregas después.
+            {% endif %}
+          </p>
         </div>
 
         <label class="fila-switch">
-          <input type="checkbox" name="activa" checked>
+          <input type="checkbox" name="activa" {{ "checked" if valores.get('activa') == "on" }}>
           <span class="switch-visual"></span>
           <span>Activa (disponible para la venta ahora mismo)</span>
         </label>
@@ -102,22 +134,33 @@
         <p class="subtitulo-opcion" style="margin-top:20px;">Etiquetas especiales</p>
         <div class="grupo-checks">
           <label class="fila-check-simple">
-            <input type="checkbox" name="picante">
+            <input type="checkbox" name="picante" {{ "checked" if valores.get('picante') == "on" }}>
             🌶️ ¿Es picante?
           </label>
           <label class="fila-check-simple">
-            <input type="checkbox" name="vegetariana">
+            <input type="checkbox" name="vegetariana" {{ "checked" if valores.get('vegetariana') == "on" }}>
             🥦 ¿Es vegetariana?
           </label>
           <label class="fila-check-simple">
-            <input type="checkbox" name="recomendada">
+            <input type="checkbox" name="recomendada" {{ "checked" if valores.get('recomendada') == "on" }}>
             ⭐ ¿Es una recomendación del chef?
           </label>
         </div>
 
+        {% if modo == "editar" %}
+          <p class="ayuda-form" style="margin-top:18px;">
+            Receta actual:
+            {% for ing in pizza.ingredientes %}{{ ing }}{% if not loop.last %} · {% endif %}{% endfor %}
+          </p>
+        {% endif %}
+
         <button type="submit" class="btn-primario" style="margin-top:28px;">
-          Guardar Pizza en el Menú →
+          {{ "Guardar Cambios →" if modo == "editar" else "Guardar Pizza en el Menú →" }}
         </button>
+
+        <a href="{{ url_for('carta') }}" class="link-favorito" style="display:block;">
+          Cancelar y volver a la carta
+        </a>
       </form>
     </div>
   </div>

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Pizza Pronto — Iniciar sesión</title>
+  <title>Pizza Pronto — {{ 'Crear cuenta' if modo == 'registro' else 'Iniciar sesión' }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -13,13 +13,7 @@
       <span class="logo-cuadro"></span>
       PIZZA PRONTO
     </div>
-    <div class="nav-links">
-      <span class="pill">📍 Entrega en: Domicilio actual ▾</span>
-      <span class="pill activo">Carta Digital</span>
-      <span class="pill">Crear mi Pizza</span>
-      <span class="pill">Mis Pedidos / En Vivo</span>
-      <span class="pill">Club Pronto</span>
-    </div>
+
     <div style="display:flex; align-items:center; gap:14px;">
       <div class="carrito">🛍️ Carrito <span class="badge"></span></div>
       <div class="avatar">🙂</div>
@@ -28,19 +22,27 @@
 
   <div class="contenedor-login">
 
-    <!-- Panel izquierdo: formulario de login -->
+    <!-- Panel izquierdo: formulario de login o registro -->
     <div class="panel">
       <div class="tabs">
-        <div class="tab activo">→ INICIAR SESIÓN</div>
-        <div class="tab">👤 REGISTRARSE</div>
+        <a href="{{ url_for('login') }}" class="tab {{ 'activo' if modo != 'registro' else '' }}" style="text-decoration:none;">→ INICIAR SESIÓN</a>
+        <a href="{{ url_for('registrarse') }}" class="tab {{ 'activo' if modo == 'registro' else '' }}" style="text-decoration:none;">👤 REGISTRARSE</a>
       </div>
 
       <span class="chip-verde">🔥 AUTÉNTICO HORNO NAPOLITANO</span>
-      <h1>Bienvenido a PIZZA PRONTO</h1>
-      <p class="subtitulo">
-        Experiencia Forno &amp; Tradición • Accede para ordenar o sincronizar tus
-        creaciones culinarias de autor.
-      </p>
+
+      {% if modo == 'registro' %}
+        <h1>Crea tu cuenta</h1>
+        <p class="subtitulo">
+          Regístrate para guardar tus pedidos y tus pizzas favoritas. Solo toma un minuto.
+        </p>
+      {% else %}
+        <h1>Bienvenido a PIZZA PRONTO</h1>
+        <p class="subtitulo">
+          Experiencia Forno &amp; Tradición • Accede para ordenar o sincronizar tus
+          creaciones culinarias de autor.
+        </p>
+      {% endif %}
 
       {% with mensajes = get_flashed_messages() %}
         {% if mensajes %}
@@ -50,6 +52,50 @@
         {% endif %}
       {% endwith %}
 
+      {% if modo == 'registro' %}
+      <!-- ---------- Formulario de REGISTRO ---------- -->
+      <form method="POST" action="{{ url_for('registrarse') }}">
+        <div class="campo">
+          <label for="nombre">Nombre</label>
+          <div class="input-con-icono">
+            <span class="icono">🙂</span>
+            <input type="text" id="nombre" name="nombre" placeholder="Marco Bellini"
+                   value="{{ valores.get('nombre', '') }}" required>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="correo">Correo electrónico</label>
+          <div class="input-con-icono">
+            <span class="icono">✉️</span>
+            <input type="email" id="correo" name="correo" placeholder="marco.bellini@ejemplo.com"
+                   value="{{ valores.get('correo', '') }}" required>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="contrasena">Contraseña</label>
+          <div class="input-con-icono">
+            <span class="icono">🔒</span>
+            <input type="password" id="contrasena" name="contrasena" placeholder="Mínimo 4 caracteres" required>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="confirmar_contrasena">Confirmar contraseña</label>
+          <div class="input-con-icono">
+            <span class="icono">🔒</span>
+            <input type="password" id="confirmar_contrasena" name="confirmar_contrasena" placeholder="Repite tu contraseña" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primario">
+          Crear cuenta y ver el menú →
+        </button>
+      </form>
+
+      {% else %}
+      <!-- ---------- Formulario de LOGIN ---------- -->
       <form method="POST" action="{{ url_for('login') }}">
         <div class="campo">
           <label for="email">Correo electrónico o Teléfono móvil</label>
@@ -79,6 +125,7 @@
           ACCEDER A MIS FAVORITOS →
         </button>
       </form>
+      {% endif %}
 
       <div class="separador">O CONTINUAR CON</div>
 

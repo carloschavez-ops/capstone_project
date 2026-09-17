@@ -11,6 +11,14 @@
 
   {% include "navbar.html" %}
 
+  {% with mensajes = get_flashed_messages() %}
+    {% if mensajes %}
+      <div class="avisos-carta">
+        <div class="mensaje-error">{{ mensajes[0] }}</div>
+      </div>
+    {% endif %}
+  {% endwith %}
+
   <header class="cabecera-carta">
     <div>
       <p class="eyebrow-carta">Cocina napolitana · horno de piedra a 450 °C</p>
@@ -24,6 +32,14 @@
       </div>
     </div>
   </header>
+
+  {% if es_admin %}
+  <div class="barra-admin">
+    <span class="chip-verde" style="margin:0;">🔧 MODO ADMINISTRADOR</span>
+    <p>Estás viendo también las pizzas ocultas. Puedes editarlas, ocultarlas o eliminarlas desde cada tarjeta.</p>
+    <a href="{{ url_for('agregar_pizza') }}" class="btn-admin btn-admin-principal">+ Agregar pizza</a>
+  </div>
+  {% endif %}
 
   <div class="barra-filtros">
     <div class="tabs-categoria">
@@ -50,7 +66,7 @@
     <!-- Columna izquierda: lista de pizzas -->
     <div id="lista-pizzas" class="lista-pizzas">
       {% for pizza in pizzas %}
-      <article class="tarjeta-pizza" tabindex="0" role="button"
+      <article class="tarjeta-pizza {{ 'pizza-inactiva' if not pizza.activo }}" tabindex="0" role="button"
            data-id="{{ pizza.id }}" data-categoria="{{ pizza.categoria }}"
            data-nombre="{{ pizza.nombre | lower }}"
            data-descripcion="{{ pizza.descripcion | lower }}"
@@ -83,6 +99,27 @@
             <span class="meta-pizza" data-meta-default="{{ pizza.meta }}">{{ pizza.meta }}</span>
             <a href="{{ url_for('personalizar', pizza_id=pizza.id) }}" class="btn-personalizar">Personalizar receta</a>
           </div>
+
+          {% if es_admin %}
+          <div class="acciones-admin" onclick="event.stopPropagation()">
+            {% if not pizza.activo %}
+              <span class="chip-inactiva">Oculta para los clientes</span>
+            {% endif %}
+
+            <a class="btn-admin" href="{{ url_for('editar_pizza', pizza_id=pizza.id) }}">✏️ Editar</a>
+
+            <form method="POST" action="{{ url_for('alternar_pizza', pizza_id=pizza.id) }}">
+              <button type="submit" class="btn-admin">
+                {{ "👁 Mostrar" if not pizza.activo else "🙈 Ocultar" }}
+              </button>
+            </form>
+
+            <form method="POST" action="{{ url_for('eliminar_pizza', pizza_id=pizza.id) }}"
+                  onsubmit="return confirm('¿Eliminar {{ pizza.nombre }} del menú? Esta acción no se puede deshacer.');">
+              <button type="submit" class="btn-admin btn-admin-peligro">🗑 Eliminar</button>
+            </form>
+          </div>
+          {% endif %}
         </div>
       </article>
       {% endfor %}
