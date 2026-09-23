@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pizza Pronto — Panel de administración</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  {% include "navbar.html" %}
+
+  <div class="contenedor-admin">
+
+    <header class="cabecera-carta">
+      <div>
+        <p class="eyebrow-carta">PANEL DE ADMINISTRACIÓN</p>
+        <h1>Menú: pizzas e ingredientes</h1>
+      </div>
+      <a href="{{ url_for('agregar_pizza') }}" class="btn-primario" style="width:auto; padding:14px 22px;">
+        + Agregar pizza
+      </a>
+    </header>
+
+    {% with mensajes = get_flashed_messages() %}
+      {% if mensajes %}
+        <div class="mensaje-error" style="max-width:1300px; margin:0 auto 20px;">{{ mensajes[0] }}</div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- ---------- Tabla de pizzas ---------- -->
+    <section class="panel panel-tabla-admin">
+      <h2>Pizzas ({{ pizzas | length }})</h2>
+      <div class="scroll-tabla">
+        <table class="tabla-admin">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Nombre</th>
+              <th>Categoría</th>
+              <th>Precio personal</th>
+              <th>Ingredientes</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pizza in pizzas %}
+            <tr>
+              <td>
+                {% if pizza.imagen %}
+                <img src="{{ pizza.imagen }}" alt="" class="miniatura-admin">
+                {% else %}
+                <span class="miniatura-admin miniatura-placeholder">🍕</span>
+                {% endif %}
+              </td>
+              <td>
+                <strong>{{ pizza.nombre }}</strong>
+                <div class="subtexto-admin">{{ pizza.id }}</div>
+              </td>
+              <td>{{ pizza.categoria }}</td>
+              <td>S/ {{ "%.2f"|format(pizza.precios.personal) }}</td>
+              <td class="subtexto-admin">{{ pizza.ingredientes | length }} ingredientes</td>
+              <td>
+                {% if pizza.activo %}
+                <span class="chip-estado chip-activo">Activa</span>
+                {% else %}
+                <span class="chip-estado chip-inactivo">Inactiva</span>
+                {% endif %}
+              </td>
+              <td>
+                <form method="POST" action="{{ url_for('admin_eliminar_pizza', pizza_id=pizza.id) }}"
+                      onsubmit="return confirm('¿Eliminar \'{{ pizza.nombre }}\' del menú? Esto no se puede deshacer.');">
+                  <button type="submit" class="btn-eliminar-admin">🗑️ Eliminar</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- Tabla de ingredientes ---------- -->
+    <section class="panel panel-tabla-admin">
+      <h2>Ingredientes ({{ ingredientes | length }})</h2>
+      <div class="scroll-tabla">
+        <table class="tabla-admin">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Nombre</th>
+              <th>Grupo</th>
+              <th>Precio extra</th>
+              <th>Dieta</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ing in ingredientes %}
+            <tr>
+              <td class="celda-emoji">{{ ing.emoji }}</td>
+              <td>
+                <strong>{{ ing.nombre }}</strong>
+                <div class="subtexto-admin">{{ ing.id }}</div>
+              </td>
+              <td>{{ ing.grupo }}</td>
+              <td>{{ "S/ %.2f"|format(ing.precio) if ing.precio > 0 else "Incluido" }}</td>
+              <td>
+                {% if ing.vegano %}<span class="chip-dieta-mini">Vegano</span>{% endif %}
+                {% if ing.sin_gluten %}<span class="chip-dieta-mini">Sin gluten</span>{% endif %}
+                {% if ing.sin_lactosa %}<span class="chip-dieta-mini">Sin lactosa</span>{% endif %}
+              </td>
+              <td>
+                <form method="POST" action="{{ url_for('admin_eliminar_ingrediente', ing_id=ing.id) }}"
+                      onsubmit="return confirm('¿Eliminar \'{{ ing.nombre }}\'? Solo se puede si ninguna pizza lo usa.');">
+                  <button type="submit" class="btn-eliminar-admin">🗑️</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+</body>
+</html>

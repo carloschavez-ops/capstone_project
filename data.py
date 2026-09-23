@@ -2,15 +2,18 @@
 """
 Datos y reglas de negocio de Pizza Pronto.
 
-Aquí vive todo lo que la app necesita saber sobre:
-  - los ingredientes (precio en soles, grupo, dieta, color para el dibujo)
-  - qué ingredientes se pueden juntar y cuáles no
-  - las pizzas de la carta
-  - cómo se calcula el precio de una receta
+Las pizzas y los ingredientes ahora viven en la base de datos (pizza_pronto.db).
+Al arrancar la app, se cargan en las listas PIZZAS e INGREDIENTES para que el
+resto del código (cotizar, validar_combinacion, el constructor, etc.) siga
+funcionando exactamente igual que antes — esa lógica no cambió ni una línea,
+solo cambió de dónde vienen los datos.
 
-app.py solo llama a estas funciones, así que si quieres cambiar precios o
-agregar ingredientes, este es el único archivo que tocas.
+Tamaños, grupos y reglas de combinación siguen siendo configuración fija del
+negocio (no algo que cambie fila por fila), así que se quedan como estaban.
 """
+import json
+
+from modelos import db, IngredienteDB, PizzaDB
 
 # ---------------------------------------------------------
 # Tamaños
@@ -54,7 +57,21 @@ def _ing(id, nombre, emoji, grupo, precio, color, vegano=True, sin_gluten=True, 
     }
 
 
-INGREDIENTES = [
+def _pizza(id, categoria, nombre, descripcion, badge, badge_tipo, tags, precios, ingredientes,
+           meta="Lista en 25 min", imagen=None, activo=True):
+    return {
+        "id": id, "categoria": categoria, "nombre": nombre, "descripcion": descripcion,
+        "badge": badge, "badge_tipo": badge_tipo, "tags": tags,
+        "precios": precios, "ingredientes": ingredientes, "meta": meta,
+        "imagen": imagen, "activo": activo,
+    }
+
+
+# ---------------------------------------------------------
+# Semilla: el catálogo inicial, solo se usa la PRIMERA vez que se crea
+# la base de datos (si ya existe pizza_pronto.db con datos, no se toca).
+# ---------------------------------------------------------
+SEMILLA_INGREDIENTES = [
     # --- Masas ---
     _ing("masa_clasica", "Masa clásica napolitana", "🫓", "masa", 0.00, "#e0b177", sin_gluten=False, kcal=220),
     _ing("masa_delgada", "Masa delgada crocante", "🫓", "masa", 1.50, "#d9a463", sin_gluten=False, kcal=180),
@@ -118,56 +135,7 @@ INGREDIENTES = [
     _ing("chiflis", "Chifles de plátano", "🍟", "extra", 2.50, "#e0b24a", kcal=90),
 ]
 
-INGREDIENTES_POR_ID = {i["id"]: i for i in INGREDIENTES}
-
-
-# ---------------------------------------------------------
-# Reglas de compatibilidad entre ingredientes
-#   tipo "bloquea"  -> no se puede agregar al carrito
-#   tipo "advierte" -> se puede, pero avisamos al cliente
-# Se pueden escribir por id de ingrediente o por grupo (grupo:carne).
-# ---------------------------------------------------------
-REGLAS_COMBINACION = [
-    {"tipo": "bloquea", "a": ["anchoas"], "b": ["pina", "grupo:dulce", "miel"],
-     "motivo": "Las anchoas son muy saladas y se pelean con lo dulce. La cocina no las hornea juntas."},
-    {"tipo": "bloquea", "a": ["crema_chocolate"], "b": ["grupo:carne", "grupo:queso", "aceituna", "cebolla", "jalapeno", "ajo_confitado", "oregano"],
-     "motivo": "La crema de chocolate solo va en pizzas dulces, sin ingredientes salados."},
-    {"tipo": "bloquea", "a": ["grupo:dulce"], "b": ["grupo:carne", "salsa_picante", "salsa_bbq", "aji_amarillo"],
-     "motivo": "La línea dulce no se combina con carnes ni salsas picantes."},
-    {"tipo": "bloquea", "a": ["gorgonzola"], "b": ["fresa", "manjar", "marshmallow"],
-     "motivo": "El gorgonzola tapa por completo el sabor de la fruta y el manjar."},
-    {"tipo": "bloquea", "a": ["salsa_pesto"], "b": ["pina", "maiz"],
-     "motivo": "El pesto pierde su aroma al hornearse con frutas dulces."},
-
-    {"tipo": "advierte", "a": ["queso_vegano"], "b": ["grupo:carne", "salsa_blanca", "manjar"],
-     "motivo": "Con queso vegano más carne, la pizza deja de ser vegana."},
-    {"tipo": "advierte", "a": ["pina"], "b": ["grupo:carne"],
-     "motivo": "Piña con carne: combinación clásica, pero no le gusta a todo el mundo."},
-    {"tipo": "advierte", "a": ["rucula", "albahaca", "espinaca"], "b": ["salsa_bbq"],
-     "motivo": "Las hojas frescas se marchitan con el ahumado del BBQ. Las ponemos al final."},
-    {"tipo": "advierte", "a": ["salsa_picante", "jalapeno", "aji_amarillo"], "b": ["mozzarella_bufala"],
-     "motivo": "El picante domina a la búfala. Si quieres sentirla, baja el picante."},
-    {"tipo": "advierte", "a": ["anchoas"], "b": ["chorizo", "tocino", "pepperoni"],
-     "motivo": "Demasiada sal junta. Te recomendamos elegir solo una de las dos."},
-    {"tipo": "advierte", "a": ["masa_sin_gluten"], "b": ["nueces"],
-     "motivo": "Preparamos en cocina compartida: las nueces pueden ser un problema de alergias."},
-]
-
-
-# ---------------------------------------------------------
-# Pizzas de la carta
-# ---------------------------------------------------------
-def _pizza(id, categoria, nombre, descripcion, badge, badge_tipo, tags, precios, ingredientes,
-           meta="Lista en 25 min", imagen=None, activo=True):
-    return {
-        "id": id, "categoria": categoria, "nombre": nombre, "descripcion": descripcion,
-        "badge": badge, "badge_tipo": badge_tipo, "tags": tags,
-        "precios": precios, "precio_base": precios["personal"],
-        "ingredientes": ingredientes, "meta": meta, "imagen": imagen, "activo": activo,
-    }
-
-
-PIZZAS = [
+SEMILLA_PIZZAS = [
     _pizza(
         "margherita-dop", "tradicionales", "Margherita Verace D.O.P",
         "La receta protegida: tomate San Marzano, mozzarella de búfala y albahaca fresca del huerto.",
@@ -224,7 +192,173 @@ PIZZAS = [
 
 
 # ---------------------------------------------------------
-# Helpers de consulta
+# Reglas de compatibilidad entre ingredientes (config fija del negocio)
+# ---------------------------------------------------------
+REGLAS_COMBINACION = [
+    {"tipo": "bloquea", "a": ["anchoas"], "b": ["pina", "grupo:dulce", "miel"],
+     "motivo": "Las anchoas son muy saladas y se pelean con lo dulce. La cocina no las hornea juntas."},
+    {"tipo": "bloquea", "a": ["crema_chocolate"], "b": ["grupo:carne", "grupo:queso", "aceituna", "cebolla", "jalapeno", "ajo_confitado", "oregano"],
+     "motivo": "La crema de chocolate solo va en pizzas dulces, sin ingredientes salados."},
+    {"tipo": "bloquea", "a": ["grupo:dulce"], "b": ["grupo:carne", "salsa_picante", "salsa_bbq", "aji_amarillo"],
+     "motivo": "La línea dulce no se combina con carnes ni salsas picantes."},
+    {"tipo": "bloquea", "a": ["gorgonzola"], "b": ["fresa", "manjar", "marshmallow"],
+     "motivo": "El gorgonzola tapa por completo el sabor de la fruta y el manjar."},
+    {"tipo": "bloquea", "a": ["salsa_pesto"], "b": ["pina", "maiz"],
+     "motivo": "El pesto pierde su aroma al hornearse con frutas dulces."},
+
+    {"tipo": "advierte", "a": ["queso_vegano"], "b": ["grupo:carne", "salsa_blanca", "manjar"],
+     "motivo": "Con queso vegano más carne, la pizza deja de ser vegana."},
+    {"tipo": "advierte", "a": ["pina"], "b": ["grupo:carne"],
+     "motivo": "Piña con carne: combinación clásica, pero no le gusta a todo el mundo."},
+    {"tipo": "advierte", "a": ["rucula", "albahaca", "espinaca"], "b": ["salsa_bbq"],
+     "motivo": "Las hojas frescas se marchitan con el ahumado del BBQ. Las ponemos al final."},
+    {"tipo": "advierte", "a": ["salsa_picante", "jalapeno", "aji_amarillo"], "b": ["mozzarella_bufala"],
+     "motivo": "El picante domina a la búfala. Si quieres sentirla, baja el picante."},
+    {"tipo": "advierte", "a": ["anchoas"], "b": ["chorizo", "tocino", "pepperoni"],
+     "motivo": "Demasiada sal junta. Te recomendamos elegir solo una de las dos."},
+    {"tipo": "advierte", "a": ["masa_sin_gluten"], "b": ["nueces"],
+     "motivo": "Preparamos en cocina compartida: las nueces pueden ser un problema de alergias."},
+]
+
+
+# ---------------------------------------------------------
+# Listas en memoria — se llenan desde la base de datos al arrancar
+# (siguen siendo listas de verdad, con este mismo nombre, para que todo el
+# resto del código que ya funciona no tenga que cambiar nada).
+# ---------------------------------------------------------
+INGREDIENTES = []
+INGREDIENTES_POR_ID = {}
+PIZZAS = []
+
+
+def calcular_dieta(ids):
+    """Marca si una combinación es vegana / sin gluten / sin lactosa."""
+    items = [obtener_ingrediente(i) for i in ids]
+    items = [i for i in items if i]
+    if not items:
+        return {"vegano": False, "sin_gluten": False, "sin_lactosa": False}
+    return {
+        "vegano": all(i["vegano"] for i in items),
+        "sin_gluten": all(i["sin_gluten"] for i in items),
+        "sin_lactosa": all(i["sin_lactosa"] for i in items),
+    }
+
+
+def sembrar_si_hace_falta():
+    """La primera vez que se crea la base de datos, la llenamos con el catálogo inicial."""
+    if IngredienteDB.query.count() == 0:
+        for i in SEMILLA_INGREDIENTES:
+            db.session.add(IngredienteDB(
+                id=i["id"], nombre=i["nombre"], emoji=i["emoji"], grupo=i["grupo"],
+                precio=i["precio"], color=i["color"], kcal=i["kcal"],
+                vegano=i["vegano"], sin_gluten=i["sin_gluten"], sin_lactosa=i["sin_lactosa"],
+            ))
+
+    if PizzaDB.query.count() == 0:
+        for p in SEMILLA_PIZZAS:
+            db.session.add(PizzaDB(
+                id=p["id"], categoria=p["categoria"], nombre=p["nombre"],
+                descripcion=p["descripcion"], badge=p["badge"], badge_tipo=p["badge_tipo"],
+                tags_json=json.dumps(p["tags"], ensure_ascii=False),
+                ingredientes_json=json.dumps(p["ingredientes"]),
+                precio_personal=p["precios"]["personal"],
+                precio_mediana=p["precios"]["mediana"],
+                precio_familiar=p["precios"]["familiar"],
+                meta=p["meta"], imagen=p.get("imagen"), activo=p.get("activo", True),
+            ))
+
+    db.session.commit()
+
+
+def cargar_desde_bd():
+    """Refresca INGREDIENTES y PIZZAS con lo que haya ahora mismo en la base de datos."""
+    ingredientes = [fila.to_dict() for fila in IngredienteDB.query.order_by(IngredienteDB.grupo, IngredienteDB.nombre).all()]
+    INGREDIENTES.clear()
+    INGREDIENTES.extend(ingredientes)
+    INGREDIENTES_POR_ID.clear()
+    INGREDIENTES_POR_ID.update({i["id"]: i for i in INGREDIENTES})
+
+    pizzas = [fila.to_dict() for fila in PizzaDB.query.all()]
+    for p in pizzas:
+        p["dieta"] = calcular_dieta(p["ingredientes"])
+    PIZZAS.clear()
+    PIZZAS.extend(pizzas)
+
+
+# ---------------------------------------------------------
+# Escritura: crear / eliminar (las usa el panel de administración)
+# ---------------------------------------------------------
+def crear_pizza(datos):
+    """
+    datos: dict con id, categoria, nombre, descripcion, badge, badge_tipo,
+    tags (lista), precios (dict personal/mediana/familiar), ingredientes
+    (lista de ids), meta, imagen, activo.
+    """
+    fila = PizzaDB(
+        id=datos["id"],
+        categoria=datos["categoria"],
+        nombre=datos["nombre"],
+        descripcion=datos.get("descripcion", ""),
+        badge=datos.get("badge", ""),
+        badge_tipo=datos.get("badge_tipo", "dop"),
+        tags_json=json.dumps(datos.get("tags", []), ensure_ascii=False),
+        ingredientes_json=json.dumps(datos.get("ingredientes", [])),
+        precio_personal=datos["precios"]["personal"],
+        precio_mediana=datos["precios"]["mediana"],
+        precio_familiar=datos["precios"]["familiar"],
+        meta=datos.get("meta", "Lista en 25 min"),
+        imagen=datos.get("imagen"),
+        activo=datos.get("activo", True),
+    )
+    db.session.add(fila)
+    db.session.commit()
+    cargar_desde_bd()
+
+
+def eliminar_pizza(pizza_id):
+    fila = db.session.get(PizzaDB, pizza_id)
+    if not fila:
+        return False
+    db.session.delete(fila)
+    db.session.commit()
+    cargar_desde_bd()
+    return True
+
+
+def crear_ingrediente(datos):
+    fila = IngredienteDB(
+        id=datos["id"], nombre=datos["nombre"], emoji=datos.get("emoji", "🍕"),
+        grupo=datos["grupo"], precio=datos.get("precio", 0.0), color=datos.get("color", "#cccccc"),
+        kcal=datos.get("kcal", 30), vegano=datos.get("vegano", True),
+        sin_gluten=datos.get("sin_gluten", True), sin_lactosa=datos.get("sin_lactosa", True),
+    )
+    db.session.add(fila)
+    db.session.commit()
+    cargar_desde_bd()
+
+
+def eliminar_ingrediente(ing_id):
+    """
+    Si alguna pizza de la carta todavía usa este ingrediente, no lo borramos
+    (dejaría esa pizza con una receta rota) — avisamos cuáles son.
+    Devuelve (ok, lista_de_pizzas_que_lo_usan).
+    """
+    en_uso = [p["nombre"] for p in PIZZAS if ing_id in p["ingredientes"]]
+    if en_uso:
+        return False, en_uso
+
+    fila = db.session.get(IngredienteDB, ing_id)
+    if not fila:
+        return False, []
+
+    db.session.delete(fila)
+    db.session.commit()
+    cargar_desde_bd()
+    return True, []
+
+
+# ---------------------------------------------------------
+# Helpers de consulta (sin cambios respecto a la versión anterior)
 # ---------------------------------------------------------
 def obtener_pizza(pizza_id):
     for p in PIZZAS:
@@ -253,24 +387,6 @@ def ingredientes_por_grupo():
     return salida
 
 
-def calcular_dieta(ids):
-    """Marca si una combinación es vegana / sin gluten / sin lactosa."""
-    items = [obtener_ingrediente(i) for i in ids]
-    items = [i for i in items if i]
-    if not items:
-        return {"vegano": False, "sin_gluten": False, "sin_lactosa": False}
-    return {
-        "vegano": all(i["vegano"] for i in items),
-        "sin_gluten": all(i["sin_gluten"] for i in items),
-        "sin_lactosa": all(i["sin_lactosa"] for i in items),
-    }
-
-
-# Cada pizza de la carta recibe su dieta calculada a partir de sus ingredientes.
-for _p in PIZZAS:
-    _p["dieta"] = calcular_dieta(_p["ingredientes"])
-
-
 # ---------------------------------------------------------
 # Validación de combinaciones
 # ---------------------------------------------------------
@@ -296,7 +412,6 @@ def validar_combinacion(ids):
     ids = [i for i in ids if obtener_ingrediente(i)]
     errores, advertencias = [], []
 
-    # 1) Reglas de cantidad por grupo
     for g in GRUPOS:
         del_grupo = [i for i in ids if obtener_ingrediente(i)["grupo"] == g["id"]]
         if len(del_grupo) > g["max"]:
@@ -306,7 +421,6 @@ def validar_combinacion(ids):
                 "ingredientes": del_grupo,
             })
 
-    # 2) La masa y la salsa son obligatorias
     if not any(obtener_ingrediente(i)["grupo"] == "masa" for i in ids):
         errores.append({"titulo": "Falta elegir la masa",
                         "detalle": "Toda pizza necesita una masa.", "ingredientes": []})
@@ -314,11 +428,9 @@ def validar_combinacion(ids):
         errores.append({"titulo": "Falta elegir la salsa base",
                         "detalle": "Elige al menos una salsa para la base.", "ingredientes": []})
 
-    # 3) Reglas de combinación entre ingredientes
     for regla in REGLAS_COMBINACION:
         lado_a = _expandir(regla["a"], ids)
         lado_b = _expandir(regla["b"], ids)
-        # Evitamos que un ingrediente choque consigo mismo
         pares = [(a, b) for a in lado_a for b in lado_b if a != b]
         if not pares:
             continue

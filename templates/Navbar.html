@@ -8,6 +8,10 @@
     <a href="{{ url_for('crear_mi_pizza') }}" class="pill {{ 'activo' if request.endpoint == 'crear_mi_pizza' }}">Crear mi pizza</a>
     {% if es_admin %}
     <a href="{{ url_for('agregar_pizza') }}" class="pill {{ 'activo' if request.endpoint == 'agregar_pizza' }}">Agregar pizza al menú</a>
+    <a href="{{ url_for('admin_menu') }}" class="pill {{ 'activo' if request.endpoint == 'admin_menu' }}">📋 Panel admin</a>
+    {% endif %}
+    {% if tiene_pedido_activo %}
+    <a href="{{ url_for('ver_seguimiento', codigo=codigo_pedido_activo) }}" class="pill {{ 'activo' if request.endpoint == 'ver_seguimiento' }}">🛵 Mi pedido en vivo</a>
     {% endif %}
   </div>
   <div class="zona-derecha-nav">

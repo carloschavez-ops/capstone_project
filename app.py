@@ -2,6 +2,7 @@ import json
 import os
 import re
 import uuid
+from modelos import db
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.utils import secure_filename
@@ -12,10 +13,19 @@ from data import (
     obtener_pizza, obtener_ingrediente, obtener_tamano,
     ingredientes_por_grupo, ingredientes_bloqueados,
     validar_combinacion, pizzas_similares, cotizar, calcular_dieta,
+    sembrar_si_hace_falta, cargar_desde_bd,
+    crear_pizza, eliminar_pizza, eliminar_ingrediente,
 )
-
 app = Flask(__name__)
 app.secret_key = "clave-secreta-pizza-pronto-dev"  # Cambia esto en producción
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(app.root_path, "pizza_pronto.db")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db.init_app(app)
+
+with app.app_context():
+    db.create_all()
+    sembrar_si_hace_falta()
+    cargar_desde_bd()
 
 # --- "Base de datos" de usuarios (por ahora fija, en memoria) ---
 USUARIO_VALIDO = {
@@ -198,6 +208,7 @@ def registrarse():
 def modo_invitado():
     session["invitado"] = True
     session["logueado"] = False
+    session["es_admin"] = False
     session["email"] = None
     session.setdefault("carrito", [])
     if session.get("datos_cliente"):
@@ -668,7 +679,7 @@ def agregar_pizza():
                                    valores=request.form, **contexto_base())
 
         nueva_pizza = {"id": generar_id(datos["nombre"]), "meta": "Recién agregada", **datos}
-        PIZZAS.append(nueva_pizza)
+        crear_pizza(nueva_pizza)
 
         if datos["activo"]:
             flash(f'"{datos["nombre"]}" ya aparece en la carta. Entra a Personalizar para ajustar su receta.')
@@ -734,6 +745,39 @@ def eliminar_pizza(pizza_id):
         PIZZAS.remove(pizza)
         flash(f'Eliminamos "{pizza["nombre"]}" del menú.')
     return redirect(url_for("carta"))
+@app.route("/admin/menu")
+def admin_menu():
+    if not session.get("es_admin"):
+        flash("Esta opción es solo para el equipo de Pizza Pronto.")
+        return redirect(url_for("login"))
+    return render_template(
+        "admin_menu.html", pizzas=PIZZAS, ingredientes=INGREDIENTES, **contexto_base()
+    )
+
+
+@app.route("/admin/pizza/<pizza_id>/eliminar", methods=["POST"])
+def admin_eliminar_pizza(pizza_id):
+    if not session.get("es_admin"):
+        return redirect(url_for("login"))
+    if eliminar_pizza(pizza_id):
+        flash("Pizza eliminada del menú.")
+    else:
+        flash("No encontramos esa pizza.")
+    return redirect(url_for("admin_menu"))
+
+
+@app.route("/admin/ingrediente/<ing_id>/eliminar", methods=["POST"])
+def admin_eliminar_ingrediente(ing_id):
+    if not session.get("es_admin"):
+        return redirect(url_for("login"))
+    ok, en_uso = eliminar_ingrediente(ing_id)
+    if ok:
+        flash("Ingrediente eliminado.")
+    elif en_uso:
+        flash("No se puede eliminar: lo usan estas pizzas → " + ", ".join(en_uso))
+    else:
+        flash("No encontramos ese ingrediente.")
+    return redirect(url_for("admin_menu"))
 
 if __name__ == "__main__":
     app.run(debug=True)
