@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.py[cod]
+backend/pizza_pronto.sqlite3
+frontend/node_modules/
+frontend/dist/
