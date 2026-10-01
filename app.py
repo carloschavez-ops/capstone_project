@@ -14,7 +14,8 @@ from data import (
     ingredientes_por_grupo, ingredientes_bloqueados,
     validar_combinacion, pizzas_similares, cotizar, calcular_dieta,
     sembrar_si_hace_falta, cargar_desde_bd,
-    crear_pizza, eliminar_pizza, eliminar_ingrediente,
+    crear_pizza, eliminar_pizza as eliminar_pizza_bd, actualizar_pizza,
+    crear_ingrediente, eliminar_ingrediente, actualizar_ingrediente,
 )
 app = Flask(__name__)
 app.secret_key = "clave-secreta-pizza-pronto-dev"  # Cambia esto en producción
@@ -711,9 +712,9 @@ def editar_pizza(pizza_id):
                                    accion=url_for("editar_pizza", pizza_id=pizza_id),
                                    valores=request.form, **contexto_base())
 
-        pizza.update(datos)          # el id y la receta se mantienen
-        pizza["meta"] = "Actualizada recién"
-        flash(f'Guardamos los cambios de "{pizza["nombre"]}".')
+        datos["meta"] = "Actualizada recién"
+        actualizar_pizza(pizza_id, datos)   # el id y la receta se mantienen
+        flash(f'Guardamos los cambios de "{datos["nombre"]}".')
         return redirect(url_for("carta"))
 
     return render_template("agregar_pizza.html", modo="editar", pizza=pizza,
@@ -729,8 +730,10 @@ def alternar_pizza(pizza_id):
 
     pizza = obtener_pizza(pizza_id)
     if pizza:
-        pizza["activo"] = not pizza.get("activo", True)
-        estado = "visible en la carta" if pizza["activo"] else "oculta"
+        datos = dict(pizza)
+        datos["activo"] = not pizza.get("activo", True)
+        actualizar_pizza(pizza_id, datos)
+        estado = "visible en la carta" if datos["activo"] else "oculta"
         flash(f'"{pizza["nombre"]}" quedó {estado}.')
     return redirect(url_for("carta"))
 
@@ -741,10 +744,130 @@ def eliminar_pizza(pizza_id):
         return redirect(url_for("login"))
 
     pizza = obtener_pizza(pizza_id)
-    if pizza:
-        PIZZAS.remove(pizza)
-        flash(f'Eliminamos "{pizza["nombre"]}" del menú.')
+    nombre = pizza["nombre"] if pizza else None
+    if eliminar_pizza_bd(pizza_id):
+        flash(f'Eliminamos "{nombre}" del menú.')
+    else:
+        flash("Esa pizza ya no existe.")
     return redirect(url_for("carta"))
+# ---------------------------------------------------------
+# Formulario de ingredientes (crear / editar)
+# ---------------------------------------------------------
+GRUPOS_VALIDOS = {g["id"] for g in GRUPOS}
+
+
+def _leer_formulario_ingrediente():
+    """Lee y valida el formulario de ingrediente. Devuelve (datos, error)."""
+    form = request.form
+    nombre = form.get("nombre", "").strip()
+    emoji = form.get("emoji", "").strip() or "🍕"
+    grupo = form.get("grupo", "")
+    color = form.get("color", "").strip() or "#cccccc"
+
+    def a_float(campo, defecto=0.0):
+        valor = form.get(campo, "").strip().replace(",", ".")
+        try:
+            return float(valor) if valor else defecto
+        except ValueError:
+            return None
+
+    def a_int(campo, defecto=30):
+        valor = form.get(campo, "").strip()
+        try:
+            return int(valor) if valor else defecto
+        except ValueError:
+            return None
+
+    precio = a_float("precio", 0.0)
+    kcal = a_int("kcal", 30)
+
+    if not nombre:
+        return None, "Escribe el nombre del ingrediente."
+    if grupo not in GRUPOS_VALIDOS:
+        return None, "Elige un grupo válido para el ingrediente."
+    if precio is None:
+        return None, "El precio extra debe ser un número válido, por ejemplo 3.50."
+    if kcal is None:
+        return None, "Las calorías deben ser un número entero."
+
+    datos = {
+        "nombre": nombre,
+        "emoji": emoji,
+        "grupo": grupo,
+        "precio": precio,
+        "color": color,
+        "kcal": kcal,
+        "vegano": form.get("vegano") == "on",
+        "sin_gluten": form.get("sin_gluten") == "on",
+        "sin_lactosa": form.get("sin_lactosa") == "on",
+    }
+    return datos, None
+
+
+def _valores_desde_ingrediente(i):
+    """Convierte un ingrediente guardado en los valores que espera el formulario."""
+    return {
+        "nombre": i["nombre"], "emoji": i["emoji"], "grupo": i["grupo"],
+        "precio": i["precio"], "color": i["color"], "kcal": i["kcal"],
+        "vegano": "on" if i["vegano"] else "",
+        "sin_gluten": "on" if i["sin_gluten"] else "",
+        "sin_lactosa": "on" if i["sin_lactosa"] else "",
+    }
+
+
+@app.route("/agregar-ingrediente", methods=["GET", "POST"])
+def agregar_ingrediente():
+    if not session.get("es_admin"):
+        flash("Esta opción es solo para el equipo de Pizza Pronto.")
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        datos, error = _leer_formulario_ingrediente()
+        if error:
+            flash(error)
+            return render_template("Agregar_ingrediente.html", modo="crear", ingrediente=None,
+                                   accion=url_for("agregar_ingrediente"), grupos=GRUPOS,
+                                   valores=request.form, **contexto_base())
+
+        datos["id"] = generar_id(datos["nombre"])
+        crear_ingrediente(datos)
+        flash(f'"{datos["nombre"]}" fue agregado a los ingredientes.')
+        return redirect(url_for("admin_menu"))
+
+    valores_iniciales = {"vegano": "on", "sin_gluten": "on", "sin_lactosa": "on", "color": "#cccccc"}
+    return render_template("Agregar_ingrediente.html", modo="crear", ingrediente=None,
+                           accion=url_for("agregar_ingrediente"), grupos=GRUPOS,
+                           valores=valores_iniciales, **contexto_base())
+
+
+@app.route("/editar-ingrediente/<ing_id>", methods=["GET", "POST"])
+def editar_ingrediente(ing_id):
+    if not session.get("es_admin"):
+        flash("Esta opción es solo para el equipo de Pizza Pronto.")
+        return redirect(url_for("login"))
+
+    ingrediente = obtener_ingrediente(ing_id)
+    if not ingrediente:
+        flash("Ese ingrediente ya no existe.")
+        return redirect(url_for("admin_menu"))
+
+    if request.method == "POST":
+        datos, error = _leer_formulario_ingrediente()
+        if error:
+            flash(error)
+            return render_template("Agregar_ingrediente.html", modo="editar", ingrediente=ingrediente,
+                                   accion=url_for("editar_ingrediente", ing_id=ing_id), grupos=GRUPOS,
+                                   valores=request.form, **contexto_base())
+
+        actualizar_ingrediente(ing_id, datos)
+        flash(f'Guardamos los cambios de "{datos["nombre"]}".')
+        return redirect(url_for("admin_menu"))
+
+    return render_template("Agregar_ingrediente.html", modo="editar", ingrediente=ingrediente,
+                           accion=url_for("editar_ingrediente", ing_id=ing_id), grupos=GRUPOS,
+                           valores=_valores_desde_ingrediente(ingrediente), **contexto_base())
+
+
 @app.route("/admin/menu")
 def admin_menu():
     if not session.get("es_admin"):
@@ -759,7 +882,7 @@ def admin_menu():
 def admin_eliminar_pizza(pizza_id):
     if not session.get("es_admin"):
         return redirect(url_for("login"))
-    if eliminar_pizza(pizza_id):
+    if eliminar_pizza_bd(pizza_id):
         flash("Pizza eliminada del menú.")
     else:
         flash("No encontramos esa pizza.")

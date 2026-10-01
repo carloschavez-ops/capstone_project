@@ -325,6 +325,55 @@ def eliminar_pizza(pizza_id):
     return True
 
 
+def actualizar_pizza(pizza_id, datos):
+    """
+    Sobrescribe una pizza ya existente con los datos dados y refresca la
+    lista en memoria. Devuelve True si la encontró, False si no existe.
+    """
+    fila = db.session.get(PizzaDB, pizza_id)
+    if not fila:
+        return False
+
+    fila.categoria = datos["categoria"]
+    fila.nombre = datos["nombre"]
+    fila.descripcion = datos.get("descripcion", "")
+    fila.badge = datos.get("badge", "")
+    fila.badge_tipo = datos.get("badge_tipo", "dop")
+    fila.tags_json = json.dumps(datos.get("tags", []), ensure_ascii=False)
+    fila.ingredientes_json = json.dumps(datos.get("ingredientes", []))
+    fila.precio_personal = datos["precios"]["personal"]
+    fila.precio_mediana = datos["precios"]["mediana"]
+    fila.precio_familiar = datos["precios"]["familiar"]
+    fila.meta = datos.get("meta", fila.meta)
+    fila.imagen = datos.get("imagen")
+    fila.activo = datos.get("activo", True)
+
+    db.session.commit()
+    cargar_desde_bd()
+    return True
+
+
+def actualizar_ingrediente(ing_id, datos):
+    """Igual que actualizar_pizza pero para un ingrediente."""
+    fila = db.session.get(IngredienteDB, ing_id)
+    if not fila:
+        return False
+
+    fila.nombre = datos["nombre"]
+    fila.emoji = datos.get("emoji", "🍕")
+    fila.grupo = datos["grupo"]
+    fila.precio = datos.get("precio", 0.0)
+    fila.color = datos.get("color", "#cccccc")
+    fila.kcal = datos.get("kcal", 30)
+    fila.vegano = datos.get("vegano", True)
+    fila.sin_gluten = datos.get("sin_gluten", True)
+    fila.sin_lactosa = datos.get("sin_lactosa", True)
+
+    db.session.commit()
+    cargar_desde_bd()
+    return True
+
+
 def crear_ingrediente(datos):
     fila = IngredienteDB(
         id=datos["id"], nombre=datos["nombre"], emoji=datos.get("emoji", "🍕"),

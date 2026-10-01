@@ -5,6 +5,23 @@
   <title>Pizza Pronto — Panel de administración</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .contenedor-admin { max-width:1300px; margin:0 auto; padding:32px 20px 60px; }
+    .cabecera-carta { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:24px; }
+    .acciones-admin { display:flex; align-items:center; gap:8px; justify-content:flex-end; }
+    .btn-admin { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:10px; padding:10px 14px; font-weight:700; text-decoration:none; cursor:pointer; }
+    .btn-editar-admin { background:#fff2cc; color:#795400; }
+    .btn-agregar-admin { background:#fff1e8; color:#b94b16; border:1px solid #ffd2b8; }
+    .btn-eliminar-admin { background:#ffe8e8; color:#b42318; }
+    .btn-admin:hover, .btn-eliminar-admin:hover { opacity:.82; }
+    .tabla-admin th:last-child, .tabla-admin td:last-child { white-space:nowrap; }
+    .panel-tabla-admin { overflow:hidden; }
+    @media (max-width:700px) {
+      .cabecera-carta { align-items:stretch; flex-direction:column; }
+      .cabecera-carta .btn-primario { width:100% !important; }
+      .acciones-admin { flex-direction:column; align-items:stretch; }
+    }
+  </style>
 </head>
 <body>
 
@@ -69,10 +86,13 @@
                 {% endif %}
               </td>
               <td>
+                <div class="acciones-admin">
+                <a href="{{ url_for('editar_pizza', pizza_id=pizza.id) }}" class="btn-admin btn-editar-admin">✏️ Editar</a>
                 <form method="POST" action="{{ url_for('admin_eliminar_pizza', pizza_id=pizza.id) }}"
                       onsubmit="return confirm('¿Eliminar \'{{ pizza.nombre }}\' del menú? Esto no se puede deshacer.');">
                   <button type="submit" class="btn-eliminar-admin">🗑️ Eliminar</button>
                 </form>
+                </div>
               </td>
             </tr>
             {% endfor %}
@@ -83,7 +103,12 @@
 
     <!-- ---------- Tabla de ingredientes ---------- -->
     <section class="panel panel-tabla-admin">
-      <h2>Ingredientes ({{ ingredientes | length }})</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+        <h2>Ingredientes ({{ ingredientes | length }})</h2>
+        <a href="{{ url_for('agregar_ingrediente') }}" class="btn-admin btn-agregar-admin">
+          + Agregar Ingrediente
+        </a>
+      </div>
       <div class="scroll-tabla">
         <table class="tabla-admin">
           <thead>
@@ -112,10 +137,13 @@
                 {% if ing.sin_lactosa %}<span class="chip-dieta-mini">Sin lactosa</span>{% endif %}
               </td>
               <td>
+                <div class="acciones-admin">
+                <a href="{{ url_for('editar_ingrediente', ing_id=ing.id) }}" class="btn-admin btn-editar-admin" aria-label="Editar {{ ing.nombre }}">✏️ Editar</a>
                 <form method="POST" action="{{ url_for('admin_eliminar_ingrediente', ing_id=ing.id) }}"
                       onsubmit="return confirm('¿Eliminar \'{{ ing.nombre }}\'? Solo se puede si ninguna pizza lo usa.');">
                   <button type="submit" class="btn-eliminar-admin">🗑️</button>
                 </form>
+                </div>
               </td>
             </tr>
             {% endfor %}
