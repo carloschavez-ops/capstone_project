@@ -365,7 +365,7 @@ export default function App() {
     <>
       <header className="site-header">
         <a className="brand" href="#inicio" aria-label="Pizza Pronto Italiana, inicio"><img className="brand-logo" src={brandLogo} alt="" /><span className="brand-name">Pizza Pronto <span className="brand-italiana">Italiana</span></span></a>
-        <nav className="main-nav" aria-label="Navegación principal"><button onClick={() => setAdminPanelOpen(false)}>La carta</button>{!adminPanelOpen && <a href="#nosotros">Nuestra cocina</a>}{user.rol === 'admin' && <button className={adminPanelOpen ? 'nav-admin active' : 'nav-admin'} onClick={() => setAdminPanelOpen((open) => !open)}>Panel admin</button>}</nav>
+        <nav className="main-nav" aria-label="Navegación principal"><button onClick={() => setAdminPanelOpen(false)}>La carta</button><a href="#nosotros">Nuestra cocina</a>{user.rol === 'admin' && <button className={adminPanelOpen ? 'nav-admin active' : 'nav-admin'} onClick={() => setAdminPanelOpen(true)}>Panel admin</button>}</nav>
         <div className="header-actions"><span className="user-greeting">Hola, {user.nombre}</span><button className="logout-button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión"><LogOut size={17} /><span>Salir</span></button><button className="cart-trigger" onClick={() => { setCartOpen(true); setCheckout(false) }} aria-label={`Abrir pedido, ${units} ${units === 1 ? 'producto' : 'productos'}`}><ShoppingBag size={18} /><span>Tu pedido</span><b>{units}</b></button></div>
       </header>
 
@@ -445,12 +445,11 @@ export default function App() {
         <div className="footer-contact">
           <h2>Visítanos</h2>
           <a href="https://maps.google.com/?q=Av.+Manco+Capac+618,+Ba%C3%B1os+del+Inca,+Cajamarca" target="_blank" rel="noreferrer"><MapPin size={17} aria-hidden="true" /><span>Baños del Inca - Cajamarca<br />Av. Manco Capac #618</span></a>
-          <a href="tel:+51934216618"><Phone size={17} aria-hidden="true" /><span>934 216 618</span></a>
-          <a href="https://wa.me/51934216618" target="_blank" rel="noreferrer"><Phone size={17} aria-hidden="true" /><span>WhatsApp</span></a>
+          <a href="https://wa.me/51934216618" target="_blank" rel="noopener noreferrer"><Phone size={17} aria-hidden="true" /><span>934 216 618 (WhatsApp)</span></a>
         </div>
         <div className="footer-social">
           <h2>Síguenos</h2>
-          <a href="https://www.facebook.com/search/top?q=PIZZA%20Pronto" target="_blank" rel="noreferrer"><Facebook size={17} aria-hidden="true" /><span>PIZZA Pronto</span></a>
+          <a href="https://www.facebook.com/pizzaprontoitaliana" target="_blank" rel="noopener noreferrer"><Facebook size={17} aria-hidden="true" /><span>PIZZA Pronto</span></a>
           <a href="https://www.instagram.com/pizzapronto.italiana/" target="_blank" rel="noreferrer"><Instagram size={17} aria-hidden="true" /><span>pizzapronto.italiana</span></a>
           <a href="https://www.tiktok.com/@pizzaprontoitaliana" target="_blank" rel="noreferrer"><Video size={17} aria-hidden="true" /><span>@pizzaprontoitaliana</span></a>
         </div>
