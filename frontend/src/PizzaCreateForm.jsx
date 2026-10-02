@@ -98,7 +98,7 @@ export default function PizzaCreateForm({ onClose, onCreated, mode = 'create', i
         <h2 id="pizza-create-title">{isMenuProduct ? 'Editar producto' : mode === 'edit' ? 'Editar pizza' : 'Agregar pizza'}</h2>
         <form className="pizza-create-form" onSubmit={submit}>
           <label>Nombre<input name="nombre" required maxLength={160} autoFocus value={values.nombre} onChange={(event) => setValues((current) => ({ ...current, nombre: event.target.value }))} /></label>
-          <label>Descripción<textarea name="descripcion" rows="3" maxLength={2000} required value={values.descripcion} onChange={(event) => setValues((current) => ({ ...current, descripcion: event.target.value }))} /></label>
+          <label>Descripción<textarea name="descripcion" rows="3" maxLength={2000} value={values.descripcion} onChange={(event) => setValues((current) => ({ ...current, descripcion: event.target.value }))} /></label>
           {!isMenuProduct && <label>Tipo de pizza<select name="tipo" required value={values.tipo} onChange={(event) => setValues((current) => ({ ...current, tipo: event.target.value }))}>{TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>}
           {!isMenuProduct && <label>Ingredientes <span className="form-hint">Uno por línea</span><textarea name="ingredientes" rows="3" placeholder={'Salsa de tomate\nMozzarella\nAlbahaca'} value={values.ingredientes} onChange={(event) => setValues((current) => ({ ...current, ingredientes: event.target.value }))} /></label>}
           {isMenuProduct ? (

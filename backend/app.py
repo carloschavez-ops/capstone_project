@@ -5,6 +5,7 @@ import re
 import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory, session
 from sqlalchemy import inspect, text
@@ -45,6 +46,81 @@ ORDER_TRANSITIONS = {
 }
 MINUTOS_POR_PIZZA = 8
 PREPARATION_START_DELAY_SECONDS = 10
+
+# Consumo simulado expresado en la unidad de cada fila de inventario.
+# Los productos y recetas sin entrada mantienen el pedido y generan una advertencia.
+CONSUMO_POR_PRODUCTO = {
+    # Una baguette se considera una porción de Pan al Ajo (5 unidades servidas).
+    "pan-ajo": {"stock-panaderia-masas-y-cereales-04": 1.0},
+}
+
+CONSUMO_POR_INGREDIENTE_Y_TAMANO = {
+    "masa_clasica": {
+        "personal": {"stock-panaderia-masas-y-cereales-06": 0.15},
+        "mediana": {"stock-panaderia-masas-y-cereales-06": 0.25},
+        "familiar": {"stock-panaderia-masas-y-cereales-06": 0.40},
+    },
+    "salsa_tomate": {
+        "personal": {"stock-salsas-condimentos-e-insumos-secos-01": 0.04},
+        "mediana": {"stock-salsas-condimentos-e-insumos-secos-01": 0.06},
+        "familiar": {"stock-salsas-condimentos-e-insumos-secos-01": 0.09},
+    },
+    "mozzarella": {
+        "personal": {"stock-lacteos-y-quesos-01": 0.15},
+        "mediana": {"stock-lacteos-y-quesos-01": 0.25},
+        "familiar": {"stock-lacteos-y-quesos-01": 0.40},
+    },
+    "pepperoni": {
+        "personal": {"stock-carnes-embutidos-y-proteinas-10": 0.04},
+        "mediana": {"stock-carnes-embutidos-y-proteinas-10": 0.07},
+        "familiar": {"stock-carnes-embutidos-y-proteinas-10": 0.11},
+    },
+    "jamon": {
+        "personal": {"stock-carnes-embutidos-y-proteinas-08": 0.04},
+        "mediana": {"stock-carnes-embutidos-y-proteinas-08": 0.07},
+        "familiar": {"stock-carnes-embutidos-y-proteinas-08": 0.10},
+    },
+    "pollo": {
+        "personal": {"stock-carnes-embutidos-y-proteinas-02": 0.05},
+        "mediana": {"stock-carnes-embutidos-y-proteinas-02": 0.08},
+        "familiar": {"stock-carnes-embutidos-y-proteinas-02": 0.12},
+    },
+    "champinones": {
+        "personal": {"stock-verduras-hortalizas-y-hierbas-07": 0.03},
+        "mediana": {"stock-verduras-hortalizas-y-hierbas-07": 0.05},
+        "familiar": {"stock-verduras-hortalizas-y-hierbas-07": 0.08},
+    },
+    "cebolla": {
+        "personal": {"stock-verduras-hortalizas-y-hierbas-03": 0.03},
+        "mediana": {"stock-verduras-hortalizas-y-hierbas-03": 0.05},
+        "familiar": {"stock-verduras-hortalizas-y-hierbas-03": 0.08},
+    },
+    "aceituna": {
+        "personal": {"stock-verduras-hortalizas-y-hierbas-09": 0.02},
+        "mediana": {"stock-verduras-hortalizas-y-hierbas-09": 0.04},
+        "familiar": {"stock-verduras-hortalizas-y-hierbas-09": 0.06},
+    },
+    "albahaca": {
+        "personal": {"stock-verduras-hortalizas-y-hierbas-12": 0.05},
+        "mediana": {"stock-verduras-hortalizas-y-hierbas-12": 0.08},
+        "familiar": {"stock-verduras-hortalizas-y-hierbas-12": 0.12},
+    },
+    "tomate_cherry": {
+        "personal": {"stock-verduras-hortalizas-y-hierbas-02": 0.04},
+        "mediana": {"stock-verduras-hortalizas-y-hierbas-02": 0.07},
+        "familiar": {"stock-verduras-hortalizas-y-hierbas-02": 0.10},
+    },
+    "pina": {
+        "personal": {"stock-frutas-02": 0.10},
+        "mediana": {"stock-frutas-02": 0.18},
+        "familiar": {"stock-frutas-02": 0.28},
+    },
+    "fresa": {
+        "personal": {"stock-frutas-03": 0.05},
+        "mediana": {"stock-frutas-03": 0.08},
+        "familiar": {"stock-frutas-03": 0.12},
+    },
+}
 
 
 def start_orders_after_delay(orders):
@@ -143,7 +219,7 @@ def seed_inventory():
                 item_id=item["item_id"],
                 nombre=item["nombre"],
                 categoria=item["categoria"],
-                cantidad=0,
+                cantidad=100,
                 unidad=item["unidad"],
             ))
         else:
@@ -179,10 +255,18 @@ def normalize_pizza_dough():
 
 
 def create_app(database_uri=None):
-    app = Flask(__name__)
-    database_path = os.path.join(os.path.dirname(__file__), "pizza_pronto.sqlite3")
+    project_root = Path(__file__).resolve().parents[1]
+    instance_dir = project_root / "instance"
+    app = Flask(
+        __name__,
+        instance_path=str(instance_dir),
+        instance_relative_config=True,
+    )
+    if not database_uri:
+        instance_dir.mkdir(parents=True, exist_ok=True)
+    database_path = instance_dir / "pizza_pronto.db"
     app.config.update(
-        SQLALCHEMY_DATABASE_URI=database_uri or f"sqlite:///{database_path}",
+        SQLALCHEMY_DATABASE_URI=database_uri or f"sqlite:///{database_path.as_posix()}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         JSON_AS_ASCII=False,
         SECRET_KEY=os.environ.get("PIZZA_PRONTO_SECRET_KEY", "pizza-pronto-local-dev-key"),
@@ -313,6 +397,63 @@ def create_app(database_uri=None):
         if user.rol != "admin":
             return jsonify({"error": "No tienes permisos para administrar el menú."}), 403
         return None
+
+    def consume_soft_inventory(requested_items):
+        def apply_consumption(stock_item_id, amount, order_quantity, source):
+            stock = InventarioDB.query.filter_by(
+                tipo="ingrediente",
+                item_id=stock_item_id,
+            ).first()
+            if stock is None:
+                app.logger.warning(
+                    "Inventario blando: no existe el insumo %s mapeado para %s; "
+                    "el pedido continuara.",
+                    stock_item_id,
+                    source,
+                )
+                return
+
+            consumed = amount * order_quantity
+            stock.cantidad = round(stock.cantidad - consumed, 4)
+            if stock.cantidad < 0:
+                app.logger.warning(
+                    "Inventario blando: %s quedo en %.4f %s tras procesar %s; "
+                    "el pedido continuara.",
+                    stock.nombre,
+                    stock.cantidad,
+                    stock.unidad,
+                    source,
+                )
+
+        for requested in requested_items:
+            quantity = int(requested.get("cantidad", 1))
+            menu_item_id = requested.get("menu_item_id")
+            if menu_item_id:
+                product_consumption = CONSUMO_POR_PRODUCTO.get(menu_item_id)
+                if product_consumption is None:
+                    app.logger.warning(
+                        "Inventario blando: no hay receta de consumo para el producto %s; "
+                        "el pedido continuara.",
+                        menu_item_id,
+                    )
+                    continue
+                for stock_item_id, amount in product_consumption.items():
+                    apply_consumption(stock_item_id, amount, quantity, menu_item_id)
+                continue
+
+            size_id = requested.get("tamano_id", "mediana")
+            for ingredient_id in requested.get("ingredientes", []):
+                ingredient_consumption = CONSUMO_POR_INGREDIENTE_Y_TAMANO.get(ingredient_id)
+                if ingredient_consumption is None or size_id not in ingredient_consumption:
+                    app.logger.warning(
+                        "Inventario blando: no hay receta de consumo para el ingrediente %s "
+                        "en tamano %s; el pedido continuara.",
+                        ingredient_id,
+                        size_id,
+                    )
+                    continue
+                for stock_item_id, amount in ingredient_consumption[size_id].items():
+                    apply_consumption(stock_item_id, amount, quantity, ingredient_id)
 
     @app.get("/api/health")
     def health():
@@ -896,6 +1037,7 @@ def create_app(database_uri=None):
             paga_con=paid_amount,
             vuelto=change,
         )
+        consume_soft_inventory(requested_items)
         db.session.add(order)
         db.session.commit()
         active_orders = PedidoDB.query.filter(PedidoDB.estado.in_(ACTIVE_ORDER_STATES)).all()

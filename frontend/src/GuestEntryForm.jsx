@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ArrowLeft, ArrowRight, Bike, Store, Utensils } from 'lucide-react'
+import brandLogo from './assets/logo-pala.png'
 
 const STORE_ADDRESS = 'Av. Manco Cápac 618, Cajamarca 06004'
 const DELIVERY_OPTIONS = [
@@ -32,7 +33,7 @@ export default function GuestEntryForm({ onSubmit, onBack, busy, error }) {
     <main className="guest-entry-shell">
       <section className="guest-entry-story">
         <a className="brand guest-entry-brand" href="#inicio" aria-label="Pizza Pronto">
-          <span className="brand-mark">P</span><span>pizza<span className="brand-light">pronto</span></span>
+          <img className="brand-logo" src={brandLogo} alt="" /><span className="brand-name">Pizza Pronto <span className="brand-italiana">Italiana</span></span>
         </a>
         <div className="guest-entry-story-copy">
           <p className="eyebrow">TU PEDIDO, A TU RITMO</p>

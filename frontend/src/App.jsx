@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowRight, Banknote, Check, ChefHat, ChevronDown, CirclePlus, Clock3, CreditCard, Eye, EyeOff, LogOut, Minus, Pencil, Plus, Search, ShoppingBag, Smartphone, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, Banknote, Check, ChefHat, ChevronDown, CirclePlus, Clock3, CreditCard, Eye, EyeOff, Facebook, Instagram, LogOut, MapPin, Minus, Pencil, Phone, Plus, Search, ShoppingBag, Smartphone, Trash2, Video, X } from 'lucide-react'
 import AuthScreen from './AuthScreen.jsx'
 import GuestEntryForm from './GuestEntryForm.jsx'
 import AdminPanel from './AdminPanel.jsx'
 import PizzaEditDialog from './PizzaEditDialog.jsx'
+import PizzaCreateForm from './PizzaCreateForm.jsx'
+import brandLogo from './assets/logo-pala.png'
 import './menu-catalog.css'
+import './brand-footer.css'
 
 const money = (value) => `S/ ${Number(value || 0).toFixed(2)}`
 const readCart = () => {
@@ -361,7 +364,7 @@ export default function App() {
   return (
     <>
       <header className="site-header">
-        <a className="brand" href="#inicio" aria-label="Pizza Pronto, inicio"><span className="brand-mark">P</span><span>pizza<span className="brand-light">pronto</span></span></a>
+        <a className="brand" href="#inicio" aria-label="Pizza Pronto Italiana, inicio"><img className="brand-logo" src={brandLogo} alt="" /><span className="brand-name">Pizza Pronto <span className="brand-italiana">Italiana</span></span></a>
         <nav className="main-nav" aria-label="Navegación principal"><button onClick={() => setAdminPanelOpen(false)}>La carta</button>{!adminPanelOpen && <a href="#nosotros">Nuestra cocina</a>}{user.rol === 'admin' && <button className={adminPanelOpen ? 'nav-admin active' : 'nav-admin'} onClick={() => setAdminPanelOpen((open) => !open)}>Panel admin</button>}</nav>
         <div className="header-actions"><span className="user-greeting">Hola, {user.nombre}</span><button className="logout-button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión"><LogOut size={17} /><span>Salir</span></button><button className="cart-trigger" onClick={() => { setCartOpen(true); setCheckout(false) }} aria-label={`Abrir pedido, ${units} ${units === 1 ? 'producto' : 'productos'}`}><ShoppingBag size={18} /><span>Tu pedido</span><b>{units}</b></button></div>
       </header>
@@ -434,7 +437,25 @@ export default function App() {
         </>}
       </main>
 
-      <footer className="site-footer"><a className="brand" href="#inicio"><span className="brand-mark">P</span><span>pizza<span className="brand-light">pronto</span></span></a><span>BUENAS PIZZAS, BUENAS CONVERSACIONES.</span><span>BAÑOS DEL INCA · PERÚ © 2025</span></footer>
+      <footer className="site-footer">
+        <div className="footer-brand-column">
+          <a className="brand footer-brand" href="#inicio" aria-label="Pizza Pronto Italiana, inicio"><img className="brand-logo" src={brandLogo} alt="" /><span className="brand-name">Pizza Pronto <span className="brand-italiana">Italiana</span></span></a>
+          <p>Buenas pizzas, buenas conversaciones.</p>
+        </div>
+        <div className="footer-contact">
+          <h2>Visítanos</h2>
+          <a href="https://maps.google.com/?q=Av.+Manco+Capac+618,+Ba%C3%B1os+del+Inca,+Cajamarca" target="_blank" rel="noreferrer"><MapPin size={17} aria-hidden="true" /><span>Baños del Inca - Cajamarca<br />Av. Manco Capac #618</span></a>
+          <a href="tel:+51934216618"><Phone size={17} aria-hidden="true" /><span>934 216 618</span></a>
+          <a href="https://wa.me/51934216618" target="_blank" rel="noreferrer"><Phone size={17} aria-hidden="true" /><span>WhatsApp</span></a>
+        </div>
+        <div className="footer-social">
+          <h2>Síguenos</h2>
+          <a href="https://www.facebook.com/search/top?q=PIZZA%20Pronto" target="_blank" rel="noreferrer"><Facebook size={17} aria-hidden="true" /><span>PIZZA Pronto</span></a>
+          <a href="https://www.instagram.com/pizzapronto.italiana/" target="_blank" rel="noreferrer"><Instagram size={17} aria-hidden="true" /><span>pizzapronto.italiana</span></a>
+          <a href="https://www.tiktok.com/@pizzaprontoitaliana" target="_blank" rel="noreferrer"><Video size={17} aria-hidden="true" /><span>@pizzaprontoitaliana</span></a>
+        </div>
+        <div className="footer-bottom"><span>Pizza Pronto Italiana · Baños del Inca, Cajamarca</span><span>© {new Date().getFullYear()} Todos los derechos reservados</span></div>
+      </footer>
 
       {notice && <div className="toast" role="status">{notice}</div>}
 

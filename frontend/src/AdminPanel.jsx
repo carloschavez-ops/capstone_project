@@ -175,7 +175,7 @@ export default function AdminPanel({ onBack, onPizzaCreated }) {
             <div className="admin-order-list">
               {orders.map((order) => {
                 const action = ORDER_ACTIONS[order.estado]
-                const pizzaCount = order.items.reduce((sum, item) => sum + item.cantidad, 0)
+                const itemCount = order.items.reduce((sum, item) => sum + item.cantidad, 0)
                 return (
                   <article className="admin-order" key={order.codigo}>
                     <div className="admin-order-top">
@@ -191,7 +191,7 @@ export default function AdminPanel({ onBack, onPizzaCreated }) {
                       {order.items.map((item, index) => <li key={`${item.nombre}-${index}`}><span>{item.cantidad} × {item.nombre} <small>{item.tamano}</small></span><strong>S/ {Number(item.total).toFixed(2)}</strong></li>)}
                     </ul>
                     <div className="admin-order-bottom">
-                      <div className="admin-order-total"><span>{pizzaCount} {pizzaCount === 1 ? 'pizza' : 'pizzas'} · {order.metodo_pago}</span><strong>S/ {Number(order.total).toFixed(2)}</strong></div>
+                      <div className="admin-order-total"><span>{itemCount} {itemCount === 1 ? 'artículo' : 'artículos'} · {order.metodo_pago}</span><strong>S/ {Number(order.total).toFixed(2)}</strong></div>
                       {order.estado === 'pagado' ? <span className="order-paid"><Check size={15} /> Pago registrado</span> : <div className="admin-order-controls">
                         {order.estimado_minutos !== null && <span className="order-eta"><Clock3 size={15} /> Salida estimada en ~{order.estimado_minutos} min</span>}
                         {order.estado === 'recibido' && <span className="order-auto-start">Preparación automática en breve</span>}

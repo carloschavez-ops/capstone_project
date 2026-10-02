@@ -1,0 +1,20 @@
+﻿.brand-logo{display:block;width:42px;height:42px;flex:none;object-fit:contain}
+.brand-name{white-space:nowrap}
+.brand-italiana{background:linear-gradient(to right,#009246 33%,#fff 33%,#fff 66%,#ce2b37 66%);background-clip:text;-webkit-background-clip:text;color:transparent;-webkit-text-stroke:.45px #333;paint-order:stroke fill}
+.site-header .brand{gap:9px;font-size:clamp(13px,1.15vw,16px)}
+.site-footer{display:grid;grid-template-columns:minmax(220px,1.2fr) 1fr 1fr;gap:30px;padding:38px 8.3% 18px;background:#e9eadb;color:var(--ink)}
+.footer-brand{width:max-content;color:var(--ink)}
+.footer-brand-column>p{margin:10px 0 0 51px;color:#687267;font:italic 13px var(--serif)}
+.footer-contact,.footer-social{display:flex;flex-direction:column;align-items:flex-start;gap:11px}
+.footer-contact h2,.footer-social h2{margin:0 0 3px;color:var(--green);font-size:11px;letter-spacing:.8px;text-transform:uppercase}
+.footer-contact>a,.footer-social>a{display:flex;align-items:center;gap:9px;color:#4e5a4d;font-size:12px;line-height:1.5}
+.footer-contact>a:hover,.footer-social>a:hover{color:var(--tomato)}
+.footer-contact svg,.footer-social svg{flex:none;color:var(--green)}
+.footer-bottom{grid-column:1/-1;display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:15px;border-top:1px solid #cbd0c5;color:#777e73;font-size:10px}
+.auth-brand .brand-name,.guest-entry-brand .brand-name{color:#fff}
+.auth-brand .brand-logo,.guest-entry-brand .brand-logo{filter:brightness(0) invert(1)}
+.auth-mobile-brand{align-items:center;gap:8px}
+.auth-mobile-brand .brand-logo{width:32px;height:32px}
+@media(max-width:760px){.site-footer{grid-template-columns:1fr 1fr;gap:26px 18px;padding:30px 6% 16px}.footer-brand-column{grid-column:1/-1}.footer-bottom{font-size:9px}}
+@media(max-width:620px){.site-header .brand{gap:6px;font-size:12px;letter-spacing:0}.site-header .brand-logo{width:34px;height:34px}.site-footer{padding:25px 21px 15px}.footer-brand-column>p{margin-left:42px;font-size:12px}.footer-contact,.footer-social{gap:10px}.footer-contact h2,.footer-social h2{font-size:10px}.footer-contact>a,.footer-social>a{gap:7px;font-size:10px}.footer-contact svg,.footer-social svg{width:15px;height:15px}.footer-bottom{flex-direction:column;gap:5px;margin-top:0;font-size:8px}.footer-brand .brand-logo{width:36px;height:36px}.footer-brand{font-size:13px}}
+@media(max-width:380px){.site-header .brand-name{font-size:11px}.site-header .brand-logo{width:30px;height:30px}.header-actions{gap:7px}}

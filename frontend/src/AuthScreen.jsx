@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ArrowRight, UserRound } from 'lucide-react'
+import brandLogo from './assets/logo-pala.png'
 
 export default function AuthScreen({ mode, onModeChange, onSubmit, onGuest, busy, error }) {
   const [values, setValues] = useState({ nombre: '', email: '', password: '', confirmPassword: '' })
@@ -24,7 +25,7 @@ export default function AuthScreen({ mode, onModeChange, onSubmit, onGuest, busy
     <main className="auth-shell">
       <section className="auth-story">
         <a className="brand auth-brand" href="#inicio" aria-label="Pizza Pronto">
-          <span className="brand-mark">P</span><span>pizza<span className="brand-light">pronto</span></span>
+          <img className="brand-logo" src={brandLogo} alt="" /><span className="brand-name">Pizza Pronto <span className="brand-italiana">Italiana</span></span>
         </a>
         <div className="auth-story-copy">
           <p className="eyebrow"><span className="live-dot" /> HORNO ENCENDIDO · BAÑOS DEL INCA</p>
@@ -35,7 +36,7 @@ export default function AuthScreen({ mode, onModeChange, onSubmit, onGuest, busy
       </section>
 
       <section className="auth-side">
-        <div className="auth-mobile-brand"><span className="brand-mark">P</span><span>pizza<span className="brand-light">pronto</span></span></div>
+        <div className="auth-mobile-brand"><img className="brand-logo" src={brandLogo} alt="" /><span className="brand-name">Pizza Pronto <span className="brand-italiana">Italiana</span></span></div>
         <div className="auth-box">
           <p className="eyebrow">BIENVENIDO A PIZZA PRONTO</p>
           <h2>{isRegister ? 'Crea tu cuenta.' : 'Qué bueno verte.'}</h2>

@@ -290,7 +290,7 @@ class PizzaApiTests(unittest.TestCase):
         self.assertTrue({"Carne de res", "Queso Mozzarella", "Pisco", "Amargo de angostura"}.issubset(supply_names))
         self.assertNotIn("Harina", supply_names)
         self.assertFalse(inventory.get("pizzas"))
-        self.assertTrue(all(item["cantidad"] == 0 for item in inventory["ingredientes"]))
+        self.assertTrue(all(item["cantidad"] == 100 for item in inventory["ingredientes"]))
         beef = next(item for item in inventory["ingredientes"] if item["nombre"] == "Carne de res")
         self.assertEqual(beef["categoria"], "Carnes, Embutidos y Proteínas")
         updated_stock = self.client.put(
@@ -349,7 +349,11 @@ class PizzaApiTests(unittest.TestCase):
         updated_pizza = updated.get_json()["pizza"]
         self.assertEqual(updated_pizza["nombre"], "Pizza actualizada")
         self.assertIn("/api/uploads/", updated_pizza["imagen"])
-        self.assertEqual(self.client.get(updated_pizza["imagen"]).data, b"updated-image-data")
+        image_response = self.client.get(updated_pizza["imagen"])
+        try:
+            self.assertEqual(image_response.data, b"updated-image-data")
+        finally:
+            image_response.close()
         self.assertIn("Pizza actualizada", {item["nombre"] for item in self.client.get("/api/catalog").get_json()["pizzas"]})
 
     def test_customer_cannot_access_admin_routes(self):
