@@ -80,3 +80,42 @@ class PizzaDB(db.Model):
             "imagen": self.imagen,
             "activo": self.activo,
         }
+
+
+class MenuItemDB(db.Model):
+    __tablename__ = "menu_items"
+    __table_args__ = (db.Index("ix_menu_items_category_order", "categoria_orden", "orden"),)
+
+    id = db.Column(db.String(80), primary_key=True)
+    categoria = db.Column(db.String(60), nullable=False, index=True)
+    subcategoria = db.Column(db.String(80), nullable=False, default="")
+    nombre = db.Column(db.String(160), nullable=False)
+    descripcion = db.Column(db.Text, nullable=False, default="")
+    ingredientes_json = db.Column(db.Text, nullable=False, default="[]")
+    precio = db.Column(db.Float, nullable=False)
+    precio_mediana = db.Column(db.Float, nullable=True)
+    precio_familiar = db.Column(db.Float, nullable=True)
+    imagen = db.Column(db.String(300), nullable=False, default="")
+    es_pizza = db.Column(db.Boolean, nullable=False, default=False)
+    activo = db.Column(db.Boolean, nullable=False, default=True)
+    categoria_orden = db.Column(db.Integer, nullable=False, default=0)
+    orden = db.Column(db.Integer, nullable=False, default=0)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "categoria": self.categoria,
+            "subcategoria": self.subcategoria,
+            "nombre": self.nombre,
+            "descripcion": self.descripcion,
+            "ingredientes": json.loads(self.ingredientes_json or "[]"),
+            "precio": self.precio,
+            "precios": {
+                "personal": self.precio,
+                "mediana": self.precio_mediana,
+                "familiar": self.precio_familiar,
+            } if self.es_pizza and self.precio_mediana is not None and self.precio_familiar is not None else None,
+            "imagen": self.imagen,
+            "es_pizza": self.es_pizza,
+            "activo": self.activo,
+        }
