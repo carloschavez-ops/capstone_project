@@ -1,0 +1,78 @@
+.admin-tabs{display:flex;gap:24px;margin:-5px 0 27px;border-bottom:1px solid var(--line)}
+.admin-tabs button{display:flex;align-items:center;gap:8px;padding:11px 2px;border:0;border-bottom:2px solid transparent;background:transparent;color:#73796f;font-size:12px;cursor:pointer}
+.admin-tabs button.active{border-color:var(--tomato);color:var(--ink);font-weight:700}
+.admin-tabs button span{display:grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:#e6e9df;color:var(--green);font-size:10px}
+.admin-orders-heading{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
+.admin-orders-heading .eyebrow{margin:0;color:var(--tomato);font-size:9px}
+.admin-orders-heading h2{margin:5px 0 0;font:500 25px var(--serif)}
+.orders-refresh{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);background:#fbfaf5;color:var(--green);cursor:pointer}
+.orders-refresh:hover{border-color:var(--green)}
+.orders-refresh:disabled{opacity:.55}
+.orders-estimate-note{display:flex;align-items:center;gap:7px;margin:0 0 17px;color:#626a60;font-size:11px}
+.orders-estimate-note svg{flex:none;color:var(--tomato)}
+.admin-order-list{display:grid;gap:12px}
+.admin-order{padding:17px 19px;border:1px solid var(--line);border-left:3px solid #a5b19c;background:#fbfaf5}
+.admin-order-top,.admin-order-top>div,.admin-order-customer,.admin-order-bottom,.admin-order-total,.admin-order-controls{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.admin-order-top>div{justify-content:flex-start;flex-wrap:wrap}
+.admin-order-code{color:var(--green);font-size:12px;letter-spacing:.06em}
+.admin-order-top time{color:#747a70;font-size:10px}
+.order-status{flex:none;padding:5px 8px;background:#eceee7;color:#4f5c4c;font-size:9px;font-weight:700}
+.status-en_preparacion{background:#f6eddc;color:#87621e}
+.status-listo{background:#e5eee2;color:#3c6945}
+.status-entregado{background:#e7ecef;color:#455a67}
+.status-pagado{background:#e4eee4;color:#3f6743}
+.admin-order-customer{justify-content:flex-start;flex-wrap:wrap;margin-top:13px;color:#646b61;font-size:11px}
+.admin-order-customer strong{color:var(--ink);font-size:12px}
+.admin-order-customer a{color:var(--green);text-decoration:none}
+.admin-order-customer span{margin-left:auto}
+.admin-order-address{margin:7px 0 0;color:#72786e;font-size:10px}
+.admin-order-items{display:grid;gap:7px;margin:13px 0;padding:11px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);list-style:none}
+.admin-order-items li{display:flex;justify-content:space-between;gap:12px;color:#353d35;font-size:11px}
+.admin-order-items small{margin-left:4px;color:#73796f;font-size:9px}
+.admin-order-items li>strong{flex:none;color:#596653;font-size:10px}
+.admin-order-total{justify-content:flex-start;flex-wrap:wrap}
+.admin-order-total span{color:#73796f;font-size:10px;text-transform:capitalize}
+.admin-order-total strong{color:var(--ink);font-size:13px}
+.admin-order-controls{flex-wrap:wrap;justify-content:flex-end}
+.order-eta,.order-paid{display:flex;align-items:center;gap:6px;color:#58644f;font-size:10px;font-weight:700}
+.order-eta svg{color:var(--tomato)}
+.order-auto-start{color:#87621e;font-size:10px;font-weight:700}
+.order-action{min-height:34px;padding:0 12px;border:1px solid var(--green);background:var(--green);color:#fff;font-size:10px;font-weight:700;cursor:pointer}
+.order-action:hover{background:#293f31}
+.order-action:disabled{opacity:.6;cursor:wait}
+.orders-empty,.orders-payment-note{color:#73796f;font-size:10px}
+.orders-empty{padding:20px 0}
+.orders-payment-note{margin:15px 0 0}
+.customer-order-eta{margin:12px 0;padding:10px 12px;border-left:2px solid var(--tomato);background:#f5eee3;color:#6d4c31;font-size:11px;font-weight:700}
+.admin-add-pizza{display:inline-flex;align-items:center;gap:8px;min-height:38px;margin-top:16px;padding:0 13px;border:0;background:var(--green);color:white;font-size:11px;font-weight:700;cursor:pointer}
+.admin-add-pizza:hover{background:#293f31}
+.pizza-create-dialog{width:min(540px,100%);max-height:calc(100vh - 32px);align-self:center;margin:auto;padding:25px;background:var(--paper);box-shadow:0 12px 44px #18231e30;overflow-y:auto;animation:slide-in .2s ease-out}
+.pizza-create-dialog h2{margin:14px 0 18px;font:500 28px var(--serif)}
+.pizza-create-form{display:grid;gap:12px}
+.pizza-create-form>label{display:flex;flex-direction:column;gap:6px;color:#485346;font-size:10px;font-weight:700}
+.pizza-create-form input:not([type=file]),.pizza-create-form select,.pizza-create-form textarea{width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--line);border-radius:0;background:#fbfaf5;color:var(--ink);font:12px 'DM Sans',sans-serif}
+.pizza-create-form textarea{resize:vertical}
+.pizza-create-prices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:12px;border:1px solid var(--line)}
+.pizza-create-prices>span{grid-column:1/-1;color:#485346;font-size:10px;font-weight:700}
+.pizza-create-prices label{display:grid;gap:6px;color:#5d685a;font-size:9px;font-weight:700}
+.pizza-create-prices .price-input{position:relative}
+.pizza-create-prices .price-input>span{position:absolute;top:10px;left:8px;color:#7b8177;font-size:10px}
+.pizza-create-prices .price-input input{padding-left:25px}
+.pizza-image-field input[type=file]{width:100%;padding:9px;border:1px dashed #bac4b5;background:#f5f5ee;color:#626a60;font-size:10px}
+.image-file-name{display:flex;align-items:center;gap:7px;color:#777e73;font-size:9px;font-weight:400}
+.pizza-create-preview{width:100%;max-height:170px;object-fit:cover;background:#e7e4d9}
+.pizza-create-form .form-hint{color:#858b80;font-size:9px;font-weight:400}
+.pizza-create-form>.primary-button{width:100%}
+@media(max-width:620px){
+  .admin-tabs{gap:19px;margin-bottom:22px}
+  .admin-order{padding:14px 12px}
+  .admin-order-top{align-items:flex-start}
+  .admin-order-top>div{display:grid;gap:5px}
+  .admin-order-customer span{margin-left:0}
+  .admin-order-bottom{align-items:flex-start;flex-direction:column}
+  .admin-order-controls{width:100%;justify-content:space-between}
+  .order-action{padding:0 9px}
+  .pizza-create-dialog{padding:19px}
+  .pizza-create-prices{gap:6px;padding:9px}
+  .pizza-create-prices label{font-size:8px}
+}
