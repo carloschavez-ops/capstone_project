@@ -5,6 +5,7 @@ import GuestEntryForm from './GuestEntryForm.jsx'
 import AdminPanel from './AdminPanel.jsx'
 import PizzaEditDialog from './PizzaEditDialog.jsx'
 import PizzaCreateForm from './PizzaCreateForm.jsx'
+import { ProductVisual } from './CategoryPlaceholder.jsx'
 import brandLogo from './assets/logo-pala.png'
 import './menu-catalog.css'
 import './brand-footer.css'
@@ -400,7 +401,7 @@ export default function App() {
                 </header>
                 <div className="menu-product-list">
                   {group.items.map((item) => <article className={`menu-product ${item.activo ? '' : 'menu-product-disabled'}`} key={item.id}>
-                    {item.imagen && <img className="menu-product-image" src={item.imagen} alt={item.nombre} loading="lazy" />}
+                    <ProductVisual image={item.imagen} categoria={item.categoria} alt={item.nombre} />
                     <div className="menu-product-copy">
                       {item.subcategoria && <p className="menu-product-subcategory">{item.subcategoria}</p>}
                       <h4>{item.nombre}</h4>

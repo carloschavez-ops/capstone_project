@@ -15,6 +15,14 @@
 .menu-product{display:flex;align-items:center;justify-content:space-between;gap:18px;min-width:0;padding:18px 0;border-bottom:1px solid var(--line)}
 .menu-product-copy{min-width:0}
 .menu-product-image{flex:none;width:74px;height:74px;object-fit:cover;background:#e7e4d9}
+.menu-product-visual{flex:none;width:74px;height:74px;display:block;object-fit:cover;background:#e7e4d9}
+.menu-product-placeholder{display:grid;place-items:center;overflow:hidden;border-radius:4px;background:var(--placeholder-bg,#e8eee5);color:var(--placeholder-accent,#355e45)}
+.menu-product-placeholder svg{display:block;width:100%;height:100%}
+.placeholder-pizzas{--placeholder-bg:#f6e9d1;--placeholder-accent:#bd4d36}
+.placeholder-salchipapas,.placeholder-broasters,.placeholder-alitas{--placeholder-bg:#f3e8cf;--placeholder-accent:#9d642f}
+.placeholder-cocteles,.placeholder-jugos,.placeholder-batidos,.placeholder-gaseosas,.placeholder-bebidas{--placeholder-bg:#e5eee5;--placeholder-accent:#355e45}
+.placeholder-hamburguesas,.placeholder-sandwiches{--placeholder-bg:#f2e5d8;--placeholder-accent:#80513c}
+.placeholder-entradas,.placeholder-adicionales,.placeholder-default{--placeholder-bg:#e8eee5;--placeholder-accent:#355e45}
 .menu-product-copy{flex:1}
 .menu-product-subcategory{margin:0 0 5px;color:var(--tomato);font-size:9px;font-weight:700;text-transform:uppercase}
 .menu-product-copy h4{margin:0;color:var(--ink);font:500 17px/1.35 var(--serif)}
@@ -44,6 +52,6 @@
   .menu-product-list{grid-template-columns:1fr}
   .menu-product{gap:15px;padding:16px 0}
   .menu-product-copy h4{font-size:17px}
-  .menu-product-image{width:62px;height:62px}
+  .menu-product-visual{width:62px;height:62px}
   .menu-product-buy select{max-width:150px;font-size:9px}
 }
