@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { findProductImage } from './useProductImages.js'
 
 const normalizeCategory = (category = '') => category
   .normalize('NFD')
@@ -61,17 +62,19 @@ export default function CategoryPlaceholder({ categoria }) {
   )
 }
 
-export function ProductVisual({ image, categoria, alt }) {
-  const [imageFailed, setImageFailed] = useState(false)
-  if (!image || imageFailed) return <CategoryPlaceholder categoria={categoria} />
+export function ProductVisual({ image, categoria, alt, medida }) {
+  const [failedSource, setFailedSource] = useState('')
+  const localImage = findProductImage(alt, categoria, medida)
+  const source = localImage || image
+  if (!source || failedSource === source) return <CategoryPlaceholder categoria={categoria} />
 
   return (
     <img
       className="menu-product-visual menu-product-image"
-      src={image}
+      src={source}
       alt={alt}
       loading="lazy"
-      onError={() => setImageFailed(true)}
+      onError={() => setFailedSource(source)}
     />
   )
 }

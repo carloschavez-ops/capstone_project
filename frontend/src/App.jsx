@@ -401,7 +401,7 @@ export default function App() {
                 </header>
                 <div className="menu-product-list">
                   {group.items.map((item) => <article className={`menu-product ${item.activo ? '' : 'menu-product-disabled'}`} key={item.id}>
-                    <ProductVisual image={item.imagen} categoria={item.categoria} alt={item.nombre} />
+                    <ProductVisual image={item.imagen} categoria={item.categoria} alt={item.nombre} medida={item.subcategoria} />
                     <div className="menu-product-copy">
                       {item.subcategoria && <p className="menu-product-subcategory">{item.subcategoria}</p>}
                       <h4>{item.nombre}</h4>
