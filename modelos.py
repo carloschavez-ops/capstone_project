@@ -95,6 +95,9 @@ class MenuItemDB(db.Model):
     precio = db.Column(db.Float, nullable=False)
     precio_mediana = db.Column(db.Float, nullable=True)
     precio_familiar = db.Column(db.Float, nullable=True)
+    costo_personal = db.Column(db.Float, nullable=True)
+    costo_mediana = db.Column(db.Float, nullable=True)
+    costo_familiar = db.Column(db.Float, nullable=True)
     imagen = db.Column(db.String(300), nullable=False, default="")
     es_pizza = db.Column(db.Boolean, nullable=False, default=False)
     activo = db.Column(db.Boolean, nullable=False, default=True)
@@ -115,6 +118,11 @@ class MenuItemDB(db.Model):
                 "mediana": self.precio_mediana,
                 "familiar": self.precio_familiar,
             } if self.es_pizza and self.precio_mediana is not None and self.precio_familiar is not None else None,
+            "costos": {
+                "personal": self.costo_personal,
+                "mediana": self.costo_mediana,
+                "familiar": self.costo_familiar,
+            } if self.es_pizza and all(value is not None for value in (self.costo_personal, self.costo_mediana, self.costo_familiar)) else None,
             "imagen": self.imagen,
             "es_pizza": self.es_pizza,
             "activo": self.activo,

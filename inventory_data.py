@@ -51,6 +51,7 @@ INVENTORY_GROUPS = [
         ("Pimienta negra", "kg"), ("Canela", "paquete"), ("Clavo", "paquete"),
         ("Azúcar", "kg"),
     ]),
+    ("Empaques y Desechables", [("Caja para pizza", "unidad")]),
 ]
 
 

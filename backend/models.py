@@ -29,6 +29,8 @@ class InventarioDB(db.Model):
     categoria = db.Column(db.String(80), nullable=False, default="Otros")
     cantidad = db.Column(db.Float, nullable=False, default=0)
     unidad = db.Column(db.String(20), nullable=False, default="unidad")
+    stock_minimo = db.Column(db.Float, nullable=False, default=0)
+    costo_unitario = db.Column(db.Float, nullable=True)
 
     def to_dict(self):
         return {
@@ -37,6 +39,8 @@ class InventarioDB(db.Model):
             "categoria": self.categoria,
             "cantidad": self.cantidad,
             "unidad": self.unidad,
+            "stock_minimo": self.stock_minimo,
+            "costo_unitario": self.costo_unitario,
         }
 
 
@@ -60,7 +64,12 @@ class PedidoDB(db.Model):
     paga_con = db.Column(db.Float, nullable=False, default=0)
     vuelto = db.Column(db.Float, nullable=False, default=0)
     estado = db.Column(db.String(30), nullable=False, default="recibido")
+    canal = db.Column(db.String(30), nullable=False, default="sitio_web")
     creado_en = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    preparacion_inicio_en = db.Column(db.DateTime, nullable=True)
+    listo_en = db.Column(db.DateTime, nullable=True)
+    entregado_en = db.Column(db.DateTime, nullable=True)
+    pagado_en = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
         created_at = self.creado_en
@@ -83,5 +92,34 @@ class PedidoDB(db.Model):
             "paga_con": self.paga_con,
             "vuelto": self.vuelto,
             "estado": self.estado,
+            "canal": self.canal,
+            "creado_en": created_at.isoformat(),
+            "preparacion_inicio_en": self.preparacion_inicio_en.isoformat() if self.preparacion_inicio_en else None,
+            "listo_en": self.listo_en.isoformat() if self.listo_en else None,
+            "entregado_en": self.entregado_en.isoformat() if self.entregado_en else None,
+            "pagado_en": self.pagado_en.isoformat() if self.pagado_en else None,
+        }
+
+
+class MermaDB(db.Model):
+    __tablename__ = "mermas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), nullable=False)
+    cantidad = db.Column(db.Float, nullable=False)
+    unidad = db.Column(db.String(20), nullable=False)
+    motivo = db.Column(db.String(240), nullable=False, default="")
+    creado_en = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        created_at = self.creado_en
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        return {
+            "id": self.id,
+            "nombre": self.nombre,
+            "cantidad": self.cantidad,
+            "unidad": self.unidad,
+            "motivo": self.motivo,
             "creado_en": created_at.isoformat(),
         }

@@ -29,7 +29,7 @@ from data import (
 from menu_data import CATEGORY_ORDER, MENU_ITEMS, OBSOLETE_MENU_ITEM_IDS
 from inventory_data import INVENTORY_CATEGORIES, INVENTORY_ITEMS
 from modelos import IngredienteDB, MenuItemDB, PizzaDB, db
-from backend.models import InventarioDB, PedidoDB, UsuarioDB
+from backend.models import InventarioDB, MermaDB, PedidoDB, UsuarioDB
 
 
 ADMIN_EMAIL = "pizzapronto@gmail.com"
@@ -46,6 +46,14 @@ ORDER_TRANSITIONS = {
 }
 MINUTOS_POR_PIZZA = 8
 PREPARATION_START_DELAY_SECONDS = 10
+KITCHEN_CAPACITY_PIZZAS = 6
+BUSINESS_TIMEZONE = timezone(timedelta(hours=-5), "PET")
+CRITICAL_STOCK_MINIMA = {
+    "Queso Mozzarella": 2.0,
+    "Salsa de tomate": 2.0,
+    "Masa de pizza": 5.0,
+    "Caja de pizza": 20.0,
+}
 
 # Consumo simulado expresado en la unidad de cada fila de inventario.
 # Los productos y recetas sin entrada mantienen el pedido y generan una advertencia.
@@ -134,6 +142,7 @@ def start_orders_after_delay(orders):
             created_at = created_at.replace(tzinfo=timezone.utc)
         if (now - created_at).total_seconds() >= PREPARATION_START_DELAY_SECONDS:
             order.estado = "en_preparacion"
+            order.preparacion_inicio_en = now
             changed = True
     if changed:
         db.session.commit()
@@ -168,6 +177,53 @@ def estimate_order_queue(orders):
         remaining_minutes = max(0, queued_pizzas * MINUTOS_POR_PIZZA - elapsed_minutes)
         estimates[order.id] = math.ceil(remaining_minutes)
     return estimates
+
+
+def as_utc_datetime(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def dashboard_period_bounds(period, now=None):
+    local_now = (now or datetime.now(timezone.utc)).astimezone(BUSINESS_TIMEZONE)
+    today = local_now.date()
+    month_start = today.replace(day=1)
+    if period == "today":
+        local_start = datetime.combine(today, datetime.min.time(), BUSINESS_TIMEZONE)
+        local_end = local_start + timedelta(days=1)
+    elif period == "week":
+        local_start = datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time(), BUSINESS_TIMEZONE)
+        local_end = local_start + timedelta(days=7)
+    elif period in {"month", "compare"}:
+        local_start = datetime.combine(month_start, datetime.min.time(), BUSINESS_TIMEZONE)
+        local_end = local_now + timedelta(seconds=1)
+    elif period == "previous_month":
+        local_end = datetime.combine(month_start, datetime.min.time(), BUSINESS_TIMEZONE)
+        previous_month_last_day = month_start - timedelta(days=1)
+        local_start = datetime.combine(previous_month_last_day.replace(day=1), datetime.min.time(), BUSINESS_TIMEZONE)
+    else:
+        raise ValueError("Periodo no válido.")
+    current = (local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc))
+    comparison = None
+    if period == "compare":
+        previous_month_last_day = month_start - timedelta(days=1)
+        previous_start = datetime.combine(previous_month_last_day.replace(day=1), datetime.min.time(), BUSINESS_TIMEZONE)
+        previous_end = datetime.combine(month_start, datetime.min.time(), BUSINESS_TIMEZONE)
+        comparison = (previous_start.astimezone(timezone.utc), previous_end.astimezone(timezone.utc))
+    return current, comparison
+
+
+def date_in_range(value, bounds):
+    utc_value = as_utc_datetime(value)
+    return bool(utc_value and bounds[0] <= utc_value < bounds[1])
+
+
+def average_minutes(values):
+    durations = [(end - start).total_seconds() / 60 for start, end in values if start and end and end >= start]
+    return round(sum(durations) / len(durations), 1) if durations else None
 
 
 def seed_menu_items():
@@ -221,10 +277,13 @@ def seed_inventory():
                 categoria=item["categoria"],
                 cantidad=100,
                 unidad=item["unidad"],
+                stock_minimo=CRITICAL_STOCK_MINIMA.get(item["nombre"], 0),
             ))
         else:
             row.nombre = item["nombre"]
             row.categoria = item["categoria"]
+            if row.stock_minimo == 0 and item["nombre"] in CRITICAL_STOCK_MINIMA:
+                row.stock_minimo = CRITICAL_STOCK_MINIMA[item["nombre"]]
     db.session.commit()
 
 
@@ -284,23 +343,45 @@ def create_app(database_uri=None):
             with db.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE usuarios ADD COLUMN rol VARCHAR(20) NOT NULL DEFAULT 'cliente'"))
         order_columns = {column["name"] for column in inspect(db.engine).get_columns("pedidos")}
-        for column_name in ("referencia", "dni_ruc", "numero_mesa", "paga_con", "vuelto"):
+        order_migrations = {
+            "referencia": "VARCHAR(300) NOT NULL DEFAULT ''",
+            "dni_ruc": "VARCHAR(300) NOT NULL DEFAULT ''",
+            "numero_mesa": "VARCHAR(300) NOT NULL DEFAULT ''",
+            "paga_con": "FLOAT NOT NULL DEFAULT 0",
+            "vuelto": "FLOAT NOT NULL DEFAULT 0",
+            "canal": "VARCHAR(30) NOT NULL DEFAULT 'sitio_web'",
+            "preparacion_inicio_en": "DATETIME",
+            "listo_en": "DATETIME",
+            "entregado_en": "DATETIME",
+            "pagado_en": "DATETIME",
+        }
+        for column_name, column_type in order_migrations.items():
             if column_name not in order_columns:
                 with db.engine.begin() as connection:
-                    column_type = "FLOAT" if column_name in {"paga_con", "vuelto"} else "VARCHAR(300)"
-                    default = "0" if column_type == "FLOAT" else "''"
-                    connection.execute(text(
-                        f"ALTER TABLE pedidos ADD COLUMN {column_name} {column_type} NOT NULL DEFAULT {default}"
-                    ))
+                    connection.execute(text(f"ALTER TABLE pedidos ADD COLUMN {column_name} {column_type}"))
         inventory_columns = {column["name"] for column in inspect(db.engine).get_columns("inventario")}
-        if "categoria" not in inventory_columns:
-            with db.engine.begin() as connection:
-                connection.execute(text("ALTER TABLE inventario ADD COLUMN categoria VARCHAR(80) NOT NULL DEFAULT 'Otros'"))
+        needs_stock_threshold_backfill = "stock_minimo" not in inventory_columns
+        inventory_migrations = {
+            "categoria": "VARCHAR(80) NOT NULL DEFAULT 'Otros'",
+            "stock_minimo": "FLOAT NOT NULL DEFAULT 0",
+            "costo_unitario": "FLOAT",
+        }
+        for column_name, column_type in inventory_migrations.items():
+            if column_name not in inventory_columns:
+                with db.engine.begin() as connection:
+                    connection.execute(text(f"ALTER TABLE inventario ADD COLUMN {column_name} {column_type}"))
+        if needs_stock_threshold_backfill:
+            for item in InventarioDB.query.filter_by(tipo="ingrediente").all():
+                item.stock_minimo = CRITICAL_STOCK_MINIMA.get(item.nombre, 0)
+            db.session.commit()
 
         menu_columns = {column["name"] for column in inspect(db.engine).get_columns("menu_items")}
         menu_migrations = {
             "precio_mediana": "FLOAT",
             "precio_familiar": "FLOAT",
+            "costo_personal": "FLOAT",
+            "costo_mediana": "FLOAT",
+            "costo_familiar": "FLOAT",
             "imagen": "VARCHAR(300) NOT NULL DEFAULT ''",
         }
         for column_name, column_type in menu_migrations.items():
@@ -585,6 +666,15 @@ def create_app(database_uri=None):
             return jsonify({"error": "Completa el precio de los tres tamaños."}), 400
         if any(not math.isfinite(price) or price <= 0 for price in prices.values()):
             return jsonify({"error": "Los tres precios deben ser mayores que cero."}), 400
+        costs = {}
+        try:
+            for size in ("personal", "mediana", "familiar"):
+                raw_cost = request.form.get(f"costo_{size}", "").strip()
+                costs[size] = float(raw_cost) if raw_cost else None
+        except (TypeError, ValueError):
+            return jsonify({"error": "Revisa los costos estimados de los tamaños."}), 400
+        if any(value is not None and (not math.isfinite(value) or value < 0) for value in costs.values()):
+            return jsonify({"error": "Los costos deben ser números iguales o mayores que cero."}), 400
 
         slug = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
         slug = re.sub(r"[^a-z0-9]+", "-", slug.lower()).strip("-") or "pizza"
@@ -604,6 +694,9 @@ def create_app(database_uri=None):
             precio=prices["personal"],
             precio_mediana=prices["mediana"],
             precio_familiar=prices["familiar"],
+            costo_personal=costs["personal"],
+            costo_mediana=costs["mediana"],
+            costo_familiar=costs["familiar"],
             imagen=f"/api/uploads/{filename}",
             es_pizza=True,
             activo=True,
@@ -633,6 +726,254 @@ def create_app(database_uri=None):
             result.append(order_data)
         return jsonify({"pedidos": result})
 
+    @app.get("/api/admin/dashboard")
+    def admin_dashboard():
+        error = admin_error()
+        if error:
+            return error
+        period = request.args.get("period", "today")
+        try:
+            bounds, comparison_bounds = dashboard_period_bounds(period)
+        except ValueError:
+            return jsonify({"error": "Periodo no válido."}), 400
+
+        all_orders = PedidoDB.query.order_by(PedidoDB.creado_en.asc()).all()
+        period_orders = [order for order in all_orders if date_in_range(order.creado_en, bounds)]
+        paid_orders = [order for order in period_orders if order.estado == "pagado"]
+        sales_total = round(sum(order.total for order in paid_orders), 2)
+        ticket_average = round(sales_total / len(paid_orders), 2) if paid_orders else None
+
+        menu_pizzas = MenuItemDB.query.filter_by(es_pizza=True).all()
+        pizza_names = {item.nombre for item in menu_pizzas}
+        pizza_names.update(pizza["nombre"] for pizza in PIZZAS if pizza.get("activo", True))
+        pizza_units = {name: 0 for name in pizza_names}
+        pizza_sales = {name: 0.0 for name in pizza_names}
+        size_units = {"Personal": 0, "Mediana": 0, "Familiar": 0}
+        extra_counts = {}
+        hours = [{"hour": f"{hour:02d}:00", "orders": 0, "sales": 0.0} for hour in range(24)]
+        channel_stats = {}
+        fulfillment_stats = {}
+        payment_stats = {}
+        preparation_durations = []
+        delivery_durations = []
+        first_paid_by_customer = {}
+        for order in all_orders:
+            if order.estado != "pagado" or not order.telefono:
+                continue
+            timestamp = as_utc_datetime(order.creado_en)
+            existing = first_paid_by_customer.get(order.telefono)
+            if existing is None or timestamp < existing:
+                first_paid_by_customer[order.telefono] = timestamp
+
+        for order in paid_orders:
+            created_at = as_utc_datetime(order.creado_en)
+            local_hour = created_at.astimezone(BUSINESS_TIMEZONE).hour
+            hours[local_hour]["orders"] += 1
+            hours[local_hour]["sales"] += order.total
+
+            channel = order.canal or "sitio_web"
+            channel_stats.setdefault(channel, {"name": channel.replace("_", " ").title(), "orders": 0, "sales": 0.0})
+            channel_stats[channel]["orders"] += 1
+            channel_stats[channel]["sales"] += order.total
+            fulfillment = order.tipo_entrega or "sin_dato"
+            fulfillment_stats.setdefault(fulfillment, {"name": fulfillment.replace("_", " ").title(), "orders": 0, "sales": 0.0})
+            fulfillment_stats[fulfillment]["orders"] += 1
+            fulfillment_stats[fulfillment]["sales"] += order.total
+            payment = order.metodo_pago or "sin_dato"
+            payment_stats.setdefault(payment, {"name": payment.title(), "orders": 0, "sales": 0.0})
+            payment_stats[payment]["orders"] += 1
+            payment_stats[payment]["sales"] += order.total
+
+            for item in json.loads(order.items_json):
+                quantity = int(item.get("cantidad", 1))
+                if item.get("es_pizza", True):
+                    name = item.get("nombre", "Pizza sin nombre")
+                    pizza_units[name] = pizza_units.get(name, 0) + quantity
+                    pizza_sales[name] = pizza_sales.get(name, 0.0) + float(item.get("total", 0))
+                    size_value = str(item.get("tamano_id") or item.get("tamano", "")).lower()
+                    for size_key, size_label in (("personal", "Personal"), ("mediana", "Mediana"), ("familiar", "Familiar")):
+                        if size_key in size_value:
+                            size_units[size_label] += quantity
+                            break
+                if not item.get("menu_item_id"):
+                    for extra in item.get("extras", []):
+                        extra_counts[extra] = extra_counts.get(extra, 0) + quantity
+
+            if order.preparacion_inicio_en and order.listo_en:
+                preparation_durations.append((as_utc_datetime(order.preparacion_inicio_en), as_utc_datetime(order.listo_en)))
+            if order.tipo_entrega == "delivery" and order.listo_en and order.entregado_en:
+                delivery_durations.append((as_utc_datetime(order.listo_en), as_utc_datetime(order.entregado_en)))
+
+        ordered_pizzas = sorted(pizza_units.items(), key=lambda item: (-item[1], item[0].casefold()))
+        top_pizzas = [
+            {"nombre": name, "unidades": units, "ventas": round(pizza_sales.get(name, 0), 2)}
+            for name, units in ordered_pizzas if units > 0
+        ][:5]
+        flop_pizzas = [
+            {"nombre": name, "unidades": units, "ventas": round(pizza_sales.get(name, 0), 2)}
+            for name, units in sorted(pizza_units.items(), key=lambda item: (item[1], item[0].casefold()))
+        ][:5]
+
+        size_chart = [{"name": name, "value": count} for name, count in size_units.items()]
+        extras = [{"name": name, "value": count} for name, count in sorted(extra_counts.items(), key=lambda item: (-item[1], item[0]))[:10]]
+        for row in hours:
+            row["sales"] = round(row["sales"], 2)
+
+        first_dates_in_period = [
+            phone for phone, first_order in first_paid_by_customer.items()
+            if date_in_range(first_order, bounds)
+        ]
+        period_customers = {order.telefono for order in paid_orders if order.telefono}
+        returning_customers = len(period_customers - set(first_dates_in_period))
+
+        menu_items_by_id = {item.id: item for item in menu_pizzas}
+        margins = {}
+        pizzas_without_cost = set()
+        for order in paid_orders:
+            for line in json.loads(order.items_json):
+                menu_item = menu_items_by_id.get(line.get("menu_item_id"))
+                if menu_item is None or not line.get("es_pizza", True):
+                    continue
+                size_id = line.get("tamano_id", "personal")
+                size_cost = {
+                    "personal": menu_item.costo_personal,
+                    "mediana": menu_item.costo_mediana,
+                    "familiar": menu_item.costo_familiar,
+                }.get(size_id)
+                if size_cost is None:
+                    pizzas_without_cost.add(menu_item.nombre)
+                    continue
+                row = margins.setdefault(menu_item.nombre, {"ventas": 0.0, "costo": 0.0, "unidades": 0})
+                row["ventas"] += float(line.get("total", 0))
+                row["costo"] += size_cost * int(line.get("cantidad", 1))
+                row["unidades"] += int(line.get("cantidad", 1))
+        margin_rows = [
+            {
+                "nombre": name,
+                "ventas": round(row["ventas"], 2),
+                "costo": round(row["costo"], 2),
+                "margen": round(row["ventas"] - row["costo"], 2),
+                "porcentaje": round((row["ventas"] - row["costo"]) / row["ventas"] * 100, 1) if row["ventas"] else None,
+                "unidades": row["unidades"],
+            }
+            for name, row in sorted(margins.items(), key=lambda entry: -(entry[1]["ventas"] - entry[1]["costo"]))
+        ]
+
+        stock_rows = InventarioDB.query.filter_by(tipo="ingrediente").all()
+        stock_alerts = []
+        inventory_value = 0.0
+        valued_stock_count = 0
+        for item in stock_rows:
+            if item.costo_unitario is not None:
+                inventory_value += item.cantidad * item.costo_unitario
+                valued_stock_count += 1
+            if item.stock_minimo > 0 and item.cantidad <= item.stock_minimo:
+                level = "critico" if item.cantidad <= item.stock_minimo * 0.5 else "bajo"
+                stock_alerts.append({**item.to_dict(), "nivel": level})
+        stock_alerts.sort(key=lambda item: (item["nivel"] != "critico", item["cantidad"]))
+
+        active_orders = [order for order in all_orders if order.estado in ACTIVE_ORDER_STATES]
+        queued_pizzas = sum(
+            int(item.get("cantidad", 1))
+            for order in active_orders
+            for item in json.loads(order.items_json)
+            if item.get("es_pizza", True)
+        )
+        waste_rows = MermaDB.query.order_by(MermaDB.creado_en.desc()).all()
+        waste_in_period = [row for row in waste_rows if date_in_range(row.creado_en, bounds)]
+        waste_totals = {}
+        for row in waste_in_period:
+            key = (row.nombre, row.unidad)
+            waste_totals[key] = waste_totals.get(key, 0) + row.cantidad
+        waste_summary = [
+            {"nombre": name, "unidad": unit, "cantidad": round(quantity, 3)}
+            for (name, unit), quantity in sorted(waste_totals.items())
+        ]
+
+        comparison = None
+        if comparison_bounds:
+            previous_orders = [order for order in all_orders if order.estado == "pagado" and date_in_range(order.creado_en, comparison_bounds)]
+            previous_sales = round(sum(order.total for order in previous_orders), 2)
+            comparison = {
+                "ventas": previous_sales,
+                "pedidos": len(previous_orders),
+                "variacion_porcentual": round((sales_total - previous_sales) / previous_sales * 100, 1) if previous_sales else None,
+            }
+
+        return jsonify({
+            "periodo": period,
+            "resumen": {
+                "ventas": sales_total,
+                "pedidos": len(paid_orders),
+                "pedidos_totales": len(period_orders),
+                "ticket_promedio": ticket_average,
+                "clientes_nuevos": len(first_dates_in_period),
+                "clientes_recurrentes": returning_customers,
+            },
+            "comparacion": comparison,
+            "ranking": {"top": top_pizzas, "flop": flop_pizzas},
+            "ingredientes_extra": extras,
+            "ventas_por_tamano": size_chart,
+            "ventas_por_hora": hours,
+            "operaciones": {
+                "preparacion_promedio_minutos": average_minutes(preparation_durations),
+                "preparacion_medida": len(preparation_durations),
+                "delivery_promedio_minutos": average_minutes(delivery_durations),
+                "delivery_medidos": len(delivery_durations),
+                "pedidos_en_cola": len(active_orders),
+                "pizzas_en_cola": queued_pizzas,
+                "capacidad_pizzas": KITCHEN_CAPACITY_PIZZAS,
+                "cuello_de_botella": queued_pizzas > KITCHEN_CAPACITY_PIZZAS,
+            },
+            "canales": list(sorted(channel_stats.values(), key=lambda row: -row["sales"])),
+            "modalidades": list(sorted(fulfillment_stats.values(), key=lambda row: -row["sales"])),
+            "metodos_pago": list(sorted(payment_stats.values(), key=lambda row: -row["sales"])),
+            "margenes_pizza": margin_rows,
+            "pizzas_sin_costo": len(pizzas_without_cost),
+            "inventario": {
+                "alertas": stock_alerts,
+                "valor_estimado": round(inventory_value, 2) if valued_stock_count else None,
+                "insumos_con_costo": valued_stock_count,
+            },
+            "mermas": waste_summary,
+            "registros_merma": [row.to_dict() for row in waste_in_period[:10]],
+        })
+
+    @app.get("/api/admin/waste")
+    def admin_waste():
+        error = admin_error()
+        if error:
+            return error
+        period = request.args.get("period", "month")
+        try:
+            bounds, _comparison = dashboard_period_bounds(period)
+        except ValueError:
+            return jsonify({"error": "Periodo no válido."}), 400
+        rows = [row for row in MermaDB.query.order_by(MermaDB.creado_en.desc()).all() if date_in_range(row.creado_en, bounds)]
+        return jsonify({"mermas": [row.to_dict() for row in rows]})
+
+    @app.post("/api/admin/waste")
+    def add_waste_record():
+        error = admin_error()
+        if error:
+            return error
+        payload = request.get_json(silent=True) or {}
+        name = str(payload.get("nombre", "")).strip()
+        unit = payload.get("unidad", "kg")
+        reason = str(payload.get("motivo", "")).strip()
+        try:
+            quantity = float(payload.get("cantidad"))
+        except (TypeError, ValueError):
+            quantity = 0
+        if not name or len(name) > 120 or not math.isfinite(quantity) or quantity <= 0:
+            return jsonify({"error": "Indica insumo y una cantidad de merma mayor que cero."}), 400
+        if unit not in UNIDADES_INVENTARIO:
+            return jsonify({"error": "La unidad de medida no es válida."}), 400
+        record = MermaDB(nombre=name, cantidad=quantity, unidad=unit, motivo=reason[:240])
+        db.session.add(record)
+        db.session.commit()
+        return jsonify({"merma": record.to_dict()}), 201
+
     @app.patch("/api/admin/orders/<codigo>")
     def update_admin_order(codigo):
         error = admin_error()
@@ -646,6 +987,17 @@ def create_app(database_uri=None):
         if requested_state != next_state:
             return jsonify({"error": "El pedido debe avanzar al siguiente estado disponible."}), 400
         order.estado = requested_state
+        state_time = datetime.now(timezone.utc)
+        if requested_state == "en_preparacion":
+            order.preparacion_inicio_en = state_time
+        elif requested_state == "listo":
+            if order.preparacion_inicio_en is None:
+                order.preparacion_inicio_en = order.creado_en
+            order.listo_en = state_time
+        elif requested_state == "entregado":
+            order.entregado_en = state_time
+        elif requested_state == "pagado":
+            order.pagado_en = state_time
         db.session.commit()
         return jsonify({"pedido": order.to_dict()})
 
@@ -969,7 +1321,9 @@ def create_app(database_uri=None):
                     "menu_item_id": menu_item.id,
                     "nombre": menu_item.nombre,
                     "tamano": size_name,
+                    "tamano_id": requested_size if has_size_prices else None,
                     "ingredientes": json.loads(menu_item.ingredientes_json or "[]"),
+                    "extras": [],
                     "descripcion": menu_item.descripcion,
                     "es_pizza": menu_item.es_pizza,
                     "cantidad": quantity,
@@ -996,7 +1350,9 @@ def create_app(database_uri=None):
                 line = {
                     "nombre": str(requested.get("nombre") or (pizza["nombre"] if pizza else "Pizza personalizada")),
                     "tamano": priced["tamano_nombre"],
+                    "tamano_id": size_id,
                     "ingredientes": [item["nombre"] for item in priced["detalle"]],
+                    "extras": [item["nombre"] for item in priced["detalle"] if not item["incluido"]],
                     "es_pizza": True,
                     "cantidad": quantity,
                     "precio_unitario": priced["total"],

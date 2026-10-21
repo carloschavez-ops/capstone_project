@@ -286,8 +286,8 @@ class PizzaApiTests(unittest.TestCase):
 
         inventory = self.client.get("/api/admin/inventory").get_json()
         supply_names = {item["nombre"] for item in inventory["ingredientes"]}
-        self.assertEqual(len(inventory["categorias"]), 7)
-        self.assertTrue({"Carne de res", "Queso Mozzarella", "Pisco", "Amargo de angostura"}.issubset(supply_names))
+        self.assertEqual(len(inventory["categorias"]), 8)
+        self.assertTrue({"Carne de res", "Queso Mozzarella", "Pisco", "Amargo de angostura", "Caja para pizza"}.issubset(supply_names))
         self.assertNotIn("Harina", supply_names)
         self.assertFalse(inventory.get("pizzas"))
         self.assertTrue(all(item["cantidad"] == 100 for item in inventory["ingredientes"]))

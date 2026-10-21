@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, Clock3, Plus, RefreshCw, Save } from 'lucide-react'
 import './admin-orders.css'
 import PizzaCreateForm from './PizzaCreateForm.jsx'
+import AdminDashboard from './AdminDashboard.jsx'
 
 const UNITS = ['unidad', 'g', 'kg', 'ml', 'l', 'paquete']
 const ORDER_STATES = {
@@ -160,9 +161,10 @@ export default function AdminPanel({ onBack, onPizzaCreated }) {
       <div className="admin-tabs" role="tablist" aria-label="Administración">
         <button role="tab" aria-selected={activeTab === 'pedidos'} className={activeTab === 'pedidos' ? 'active' : ''} onClick={() => setActiveTab('pedidos')}>Pedidos <span>{orders.filter((order) => order.estado !== 'pagado').length}</span></button>
         <button role="tab" aria-selected={activeTab === 'inventario'} className={activeTab === 'inventario' ? 'active' : ''} onClick={() => setActiveTab('inventario')}>Inventario</button>
+        <button role="tab" aria-selected={activeTab === 'dashboard'} className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>Dashboard</button>
       </div>
 
-      {activeTab === 'pedidos' ? (
+      {activeTab === 'dashboard' ? <AdminDashboard /> : activeTab === 'pedidos' ? (
         <section className="admin-orders-section" aria-label="Pedidos recibidos">
           <header className="admin-orders-heading">
             <div><p className="eyebrow">COCINA Y CAJA</p><h2>Pedidos</h2></div>
