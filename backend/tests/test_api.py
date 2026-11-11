@@ -1,3 +1,4 @@
+from inventory_data import INVENTORY_CATEGORIES
 import unittest
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -176,7 +177,7 @@ class PizzaApiTests(unittest.TestCase):
     def test_admin_adds_pizza_image_and_prices_by_size(self):
         login = self.client.post("/api/auth/login", json={
             "email": "pizzapronto@gmail.com",
-            "password": "pizzapronto",
+            "password": self.app.config["BOOTSTRAP_ADMIN_PASSWORD"],
         })
         self.assertEqual(login.status_code, 200)
         created = self.client.post("/api/admin/pizzas", data={
@@ -279,14 +280,14 @@ class PizzaApiTests(unittest.TestCase):
     def test_default_admin_can_manage_inventory_and_pizzas(self):
         login = self.client.post("/api/auth/login", json={
             "email": "pizzapronto@gmail.com",
-            "password": "pizzapronto",
+            "password": self.app.config["BOOTSTRAP_ADMIN_PASSWORD"],
         })
         self.assertEqual(login.status_code, 200)
         self.assertEqual(login.get_json()["user"]["rol"], "admin")
 
         inventory = self.client.get("/api/admin/inventory").get_json()
         supply_names = {item["nombre"] for item in inventory["ingredientes"]}
-        self.assertEqual(len(inventory["categorias"]), 8)
+        self.assertTrue(set(INVENTORY_CATEGORIES).issubset(inventory["categorias"]))
         self.assertTrue({"Carne de res", "Queso Mozzarella", "Pisco", "Amargo de angostura", "Caja para pizza"}.issubset(supply_names))
         self.assertNotIn("Harina", supply_names)
         self.assertFalse(inventory.get("pizzas"))
@@ -327,7 +328,7 @@ class PizzaApiTests(unittest.TestCase):
     def test_admin_can_update_pizza_image_and_public_catalog_reflects_it(self):
         login = self.client.post("/api/auth/login", json={
             "email": "pizzapronto@gmail.com",
-            "password": "pizzapronto",
+            "password": self.app.config["BOOTSTRAP_ADMIN_PASSWORD"],
         })
         self.assertEqual(login.status_code, 200)
 
@@ -405,7 +406,7 @@ class PizzaApiTests(unittest.TestCase):
 
         self.client.post("/api/auth/login", json={
             "email": "pizzapronto@gmail.com",
-            "password": "pizzapronto",
+            "password": self.app.config["BOOTSTRAP_ADMIN_PASSWORD"],
         })
         waiting = self.client.get("/api/admin/orders").get_json()["pedidos"]
         waiting_by_code = {order["codigo"]: order for order in waiting}

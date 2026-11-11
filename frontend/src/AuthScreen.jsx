@@ -42,9 +42,9 @@ export default function AuthScreen({ mode, onModeChange, onSubmit, onGuest, busy
           <h2>{isRegister ? 'Crea tu cuenta.' : 'Qué bueno verte.'}</h2>
           <p className="auth-intro">{isRegister ? 'Tus próximas pizzas empiezan aquí.' : 'Entra a tu cuenta o pide como invitado.'}</p>
 
-          <div className="auth-tabs" role="tablist" aria-label="Acceso">
-            <button className={!isRegister ? 'active' : ''} onClick={() => onModeChange('login')} role="tab" aria-selected={!isRegister}>Iniciar sesión</button>
-            <button className={isRegister ? 'active' : ''} onClick={() => onModeChange('register')} role="tab" aria-selected={isRegister}>Crear cuenta</button>
+          <div className="auth-tabs" role="group" aria-label="Acceso">
+            <button className={!isRegister ? 'active' : ''} onClick={() => onModeChange('login')} aria-pressed={!isRegister}>Iniciar sesión</button>
+            <button className={isRegister ? 'active' : ''} onClick={() => onModeChange('register')} aria-pressed={isRegister}>Crear cuenta</button>
           </div>
 
           <form className="auth-form" onSubmit={submit}>

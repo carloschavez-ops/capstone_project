@@ -1,0 +1,21 @@
+.skip-link { position: fixed; top: 8px; left: 8px; transform: translateY(-160%); z-index: 9999; background: #fff; color: #163d25; padding: 12px 20px; border: 2px solid #163d25; }
+.skip-link:focus { transform: none; }
+.skip-link:not(:focus) { clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; padding: 0; white-space: nowrap; }
+textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 3px solid #a33e2a; outline-offset: 3px; }
+button, a, input, select, textarea { touch-action: manipulation; }
+@media (max-width: 760px) {
+  .site-header { height: auto; min-height: 76px; flex-wrap: wrap; gap: 12px; padding: 14px 5%; }
+  .site-header .main-nav { display: flex; order: 3; width: 100%; overflow-x: auto; gap: 18px; }
+  .site-header .main-nav > * { flex: none; }
+  .header-actions { margin-left: auto; }
+  .header-actions .user-greeting { display: none; }
+  .admin-page { padding-left: 5%; padding-right: 5%; min-width: 0; }
+  .inventory-row { min-width: 0; grid-template-columns: minmax(90px,1fr) minmax(65px,.7fr) minmax(70px,.6fr) 36px; gap: 5px; }
+  .inventory-row input, .inventory-row select { min-width: 0; width: 100%; }
+  .builder-panel, .cart-panel, .confirmation-dialog, .pizza-create-dialog { max-height: 94dvh; max-width: 100%; overflow-y: auto; }
+  input, select, textarea { font-size: 16px; }
+  .ops-panel button, .category-tabs button, .auth-tabs button { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

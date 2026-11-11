@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch as fetch } from './api.js'
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import './admin-dashboard.css'
@@ -16,6 +17,7 @@ function ChartCard({ title, subtitle, children, className = '' }) {
 
 export default function AdminDashboard() {
   const [period, setPeriod] = useState('today')
+  const [stateFilter, setStateFilter] = useState('')
   const [data, setData] = useState(null)
   const [waste, setWaste] = useState({ nombre: '', cantidad: '', unidad: 'kg', motivo: '' })
   const [loading, setLoading] = useState(true)
@@ -26,13 +28,13 @@ export default function AdminDashboard() {
   async function loadDashboard() {
     setLoading(true); setError('')
     try {
-      const response = await fetch(`/api/admin/dashboard?period=${period}`)
+      const response = await fetch(`/api/admin/dashboard?period=${period}&estado=${stateFilter}`)
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'No se pudo cargar el dashboard.')
       setData(result)
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
-  useEffect(() => { loadDashboard() }, [period])
+  useEffect(() => { loadDashboard() }, [period, stateFilter])
 
   async function saveWaste(event) {
     event.preventDefault(); setSavingWaste(true); setError(''); setNotice('')
@@ -56,6 +58,8 @@ export default function AdminDashboard() {
     <header className="dash-heading"><div><p className="eyebrow">RESUMEN DEL NEGOCIO</p><h2>Dashboard</h2><p>Ventas, cocina e inventario en un solo lugar.</p></div><button className="orders-refresh" onClick={loadDashboard} disabled={loading} aria-label="Actualizar dashboard"><RefreshCw size={16} /></button></header>
     {error && <p className="admin-error" role="alert">{error}</p>}{notice && <p className="admin-saved" role="status">{notice}</p>}
     <nav className="dash-periods" aria-label="Periodo del reporte">{PERIODS.map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value)}>{label}</button>)}</nav>
+    <label>Estado de los pedidos <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)}><option value="">Todos</option>{['recibido', 'en_preparacion', 'listo', 'entregado', 'pagado', 'anulado'].map((state) => <option key={state} value={state}>{state.replace('_', ' ')}</option>)}</select></label>
+    <p>{resumen.anulaciones} anulaciones · {money(resumen.importe_anulado)}. En Reportes puedes seleccionar fechas exactas y conciliar los cobros.</p>
     <div className="dash-kpis">
       <article><span>Ventas cobradas</span><strong>{money(resumen.ventas)}</strong>{comparacion && <small>{comparacion.variacion_porcentual == null ? 'Sin base de comparación' : `${comparacion.variacion_porcentual > 0 ? '+' : ''}${comparacion.variacion_porcentual}% vs. mes anterior`}</small>}</article>
       <article><span>Pedidos pagados</span><strong>{resumen.pedidos}</strong><small>{resumen.pedidos_totales} recibidos en el periodo</small></article>

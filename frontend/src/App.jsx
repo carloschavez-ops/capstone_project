@@ -3,12 +3,15 @@ import { ArrowDown, ArrowRight, Banknote, Check, ChefHat, ChevronDown, CirclePlu
 import AuthScreen from './AuthScreen.jsx'
 import GuestEntryForm from './GuestEntryForm.jsx'
 import AdminPanel from './AdminPanel.jsx'
+import { apiFetch as fetch } from './api.js'
 import PizzaEditDialog from './PizzaEditDialog.jsx'
 import PizzaCreateForm from './PizzaCreateForm.jsx'
 import { ProductVisual } from './CategoryPlaceholder.jsx'
 import brandLogo from './assets/logo-pala.png'
 import './menu-catalog.css'
 import './brand-footer.css'
+import './accessibility.css'
+import DialogAccessibility from './DialogAccessibility.jsx'
 
 const money = (value) => `S/ ${Number(value || 0).toFixed(2)}`
 const readCart = () => {
@@ -49,6 +52,12 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [customBaseId, setCustomBaseId] = useState('')
   const noticeTimer = useRef(null)
+
+  useEffect(() => {
+    const expire = () => { setUser(null); setBuilder(null); setOrder(null); setCartOpen(false); setEditingProduct(null); setAdminPanelOpen(false); setAuthError('Tu sesión venció. Vuelve a ingresar.'); setAuthMode('login') }
+    window.addEventListener('pizza-session-expired', expire)
+    return () => window.removeEventListener('pizza-session-expired', expire)
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -301,7 +310,7 @@ export default function App() {
   }
 
   async function toggleMenuItemVisibility(item) {
-    const endpoint = item.es_pizza ? `/api/admin/pizzas/${encodeURIComponent(item.id)}/visibility` : `/api/admin/menu-items/${encodeURIComponent(item.id)}/visibility`
+    const endpoint = `/api/admin/menu-items/${encodeURIComponent(item.id)}/visibility`
     try {
       const response = await fetch(endpoint, {
         method: 'PATCH',
@@ -319,7 +328,7 @@ export default function App() {
 
   async function deleteMenuItem(item) {
     if (!window.confirm(`¿Eliminar “${item.nombre}” de forma permanente?`)) return
-    const endpoint = item.es_pizza ? `/api/admin/pizzas/${encodeURIComponent(item.id)}` : `/api/admin/menu-items/${encodeURIComponent(item.id)}`
+    const endpoint = `/api/admin/menu-items/${encodeURIComponent(item.id)}`
     try {
       const response = await fetch(endpoint, { method: 'DELETE' })
       const result = await response.json()
@@ -364,14 +373,16 @@ export default function App() {
 
   return (
     <>
+      <DialogAccessibility />
+      <a className="skip-link" href="#inicio">Saltar al contenido</a>
       <header className="site-header">
         <a className="brand" href="#inicio" aria-label="Pizza Pronto Italiana, inicio"><img className="brand-logo" src={brandLogo} alt="" /><span className="brand-name">Pizza Pronto <span className="brand-italiana">Italiana</span></span></a>
-        <nav className="main-nav" aria-label="Navegación principal"><button onClick={() => setAdminPanelOpen(false)}>La carta</button><a href="#nosotros">Nuestra cocina</a>{user.rol === 'admin' && <button className={adminPanelOpen ? 'nav-admin active' : 'nav-admin'} onClick={() => setAdminPanelOpen(true)}>Panel admin</button>}</nav>
+        <nav className="main-nav" aria-label="Navegación principal"><button onClick={() => setAdminPanelOpen(false)}>La carta</button><a href="#nosotros">Nuestra cocina</a>{['admin', 'cocina', 'caja'].includes(user.rol) && <button className={adminPanelOpen ? 'nav-admin active' : 'nav-admin'} onClick={() => setAdminPanelOpen(true)}>{user.rol === 'admin' ? 'Panel admin' : 'Panel de trabajo'}</button>}</nav>
         <div className="header-actions"><span className="user-greeting">Hola, {user.nombre}</span><button className="logout-button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión"><LogOut size={17} /><span>Salir</span></button><button className="cart-trigger" onClick={() => { setCartOpen(true); setCheckout(false) }} aria-label={`Abrir pedido, ${units} ${units === 1 ? 'producto' : 'productos'}`}><ShoppingBag size={18} /><span>Tu pedido</span><b>{units}</b></button></div>
       </header>
 
-      <main id="inicio">
-        {adminPanelOpen ? <AdminPanel onBack={() => setAdminPanelOpen(false)} onPizzaCreated={refreshAdminCatalog} /> : <>
+      <main id="inicio" tabIndex={-1}>
+        {adminPanelOpen ? <AdminPanel user={user} onBack={() => setAdminPanelOpen(false)} onPizzaCreated={refreshAdminCatalog} /> : <>
         <section className="hero">
           <div className="hero-copy">
             <p className="eyebrow"><span className="live-dot" /> HORNO ENCENDIDO · BAÑOS DEL INCA</p>
@@ -391,7 +402,7 @@ export default function App() {
         <section className="menu-section" id="carta">
           <div className="section-heading"><div><p className="eyebrow">EL MENÚ</p><h2>Sale del horno,<br /><em>va a tu mesa.</em></h2></div><p className="section-intro">Recetas con carácter, bordes dorados y productos de temporada. Elige una de la casa o hazla a tu manera.</p></div>
           <label className="menu-search"><Search size={17} /><span className="sr-only">Buscar en la carta</span><input type="search" value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} placeholder="Buscar platos, ingredientes..." /></label>
-          <div className="menu-toolbar"><div className="category-tabs" role="tablist" aria-label="Filtrar por categoría">{categories.map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)} role="tab" aria-selected={category === item}>{item}</button>)}</div><span className="menu-count">{searchedProducts.length.toString().padStart(2, '0')} PRODUCTOS</span></div>
+          <div className="menu-toolbar"><div className="category-tabs" role="group" aria-label="Filtrar por categoría">{categories.map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)} aria-pressed={category === item}>{item}</button>)}</div><span className="menu-count">{searchedProducts.length.toString().padStart(2, '0')} PRODUCTOS</span></div>
           {catalogError ? <div className="empty-state"><strong>No logramos conectar con cocina.</strong><span>{catalogError} Inicia el backend y vuelve a cargar.</span></div> : !catalog ? <div className="loading-state">Encendiendo el horno...</div> : (
             <div className="menu-category-groups">
               {productGroups.map((group, groupIndex) => <section className="menu-category-section" key={group.name} aria-labelledby={`menu-category-${groupIndex}`}>
@@ -465,9 +476,9 @@ export default function App() {
         showNotice(updatedProduct?.nombre ? `${updatedProduct.nombre} actualizado` : 'Producto actualizado')
       }} />}
 
-      {builder && <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setBuilder(null)}><section className="builder-panel" role="dialog" aria-modal="true" aria-labelledby="builder-title"><div className="panel-top"><span className="eyebrow">TU PIZZA, TUS REGLAS</span><button className="icon-button" onClick={() => setBuilder(null)} aria-label="Cerrar"><X size={20} /></button></div><h2 id="builder-title">{builder.nombre}</h2><p className="builder-description">{builder.descripcion}</p><label className="field-label" htmlFor="size">Tamaño</label><div className="size-options" id="size">{catalog?.tamanos.map((item) => <button key={item.id} className={size === item.id ? 'selected' : ''} onClick={() => setSize(item.id)}><span>{item.nombre.split(' ')[0]}</span><small>{item.nombre.match(/\d+ cm/)?.[0]} · {item.desc.split('·')[1]}</small></button>)}</div>
-          <div className="ingredient-head"><label className="field-label">Ingredientes</label><span>Elige masa y salsa</span></div><div className="ingredient-list">{ingredientGroups.map((group) => <fieldset className="ingredient-group" key={group.id}><legend>{group.nombre}<small>{group.ayuda}</small></legend><div className="ingredient-options">{catalog.ingredientes.filter((item) => item.grupo === group.id).map((item) => { const selected = ingredients.includes(item.id); const blocked = quote?.bloqueados?.[item.id]; return <button key={item.id} className={`ingredient-option ${selected ? 'chosen' : ''}`} disabled={Boolean(blocked)} title={blocked || item.nombre} onClick={() => setIngredients((current) => selected ? current.filter((id) => id !== item.id) : [...current, item.id])}><span className="ingredient-emoji">{item.emoji}</span><span>{item.nombre}</span><small>{Number(item.precio) === 0 ? 'Incluido' : `+${money(item.precio)}`}</small>{selected && <Check className="ingredient-check" size={15} />}</button>})}</div></fieldset>)}</div>
-          {quote?.errores?.length > 0 && <p className="form-error">{quote.errores[0].detalle}</p>}{quoteError && <p className="form-error">{quoteError}</p>}
+      {builder && <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setBuilder(null)}><section className="builder-panel" role="dialog" aria-modal="true" aria-labelledby="builder-title"><div className="panel-top"><span className="eyebrow">TU PIZZA, TUS REGLAS</span><button className="icon-button" onClick={() => setBuilder(null)} aria-label="Cerrar"><X size={20} /></button></div><h2 id="builder-title">{builder.nombre}</h2><p className="builder-description">{builder.descripcion}</p><label className="field-label" htmlFor="size">Tamaño</label><div className="size-options" role="group" aria-label="Tamaño de pizza" id="size">{catalog?.tamanos.map((item) => <button key={item.id} aria-pressed={size === item.id} className={size === item.id ? 'selected' : ''} onClick={() => setSize(item.id)}><span>{item.nombre.split(' ')[0]}</span><small>{item.nombre.match(/\d+ cm/)?.[0]} · {item.desc.split('·')[1]}</small></button>)}</div>
+          <div className="ingredient-head"><label className="field-label">Ingredientes</label><span>Elige masa y salsa</span></div><div className="ingredient-list">{ingredientGroups.map((group) => <fieldset className="ingredient-group" key={group.id}><legend>{group.nombre}<small>{group.ayuda}</small></legend><div className="ingredient-options">{catalog.ingredientes.filter((item) => item.grupo === group.id).map((item) => { const selected = ingredients.includes(item.id); const blocked = quote?.bloqueados?.[item.id]; return <button key={item.id} aria-pressed={selected} className={`ingredient-option ${selected ? 'chosen' : ''}`} disabled={Boolean(blocked)} title={blocked || item.nombre} onClick={() => setIngredients((current) => selected ? current.filter((id) => id !== item.id) : [...current, item.id])}><span className="ingredient-emoji">{item.emoji}</span><span>{item.nombre}</span><small>{Number(item.precio) === 0 ? 'Incluido' : `+${money(item.precio)}`}</small>{selected && <Check className="ingredient-check" size={15} />}</button>})}</div></fieldset>)}</div>
+          {quote?.errores?.length > 0 && <p className="form-error" role="alert">{quote.errores[0].detalle}</p>}{quoteError && <p className="form-error" role="alert">{quoteError}</p>}
           <div className="builder-bottom"><div><small>PRECIO</small><strong>{quote ? money(quote.total) : '...'}</strong></div><button className="primary-button" disabled={!quote?.ok} onClick={addConfiguredPizza}>Añadir al pedido <ArrowRight size={17} /></button></div>
         </section></div>}
 
@@ -544,7 +555,7 @@ export default function App() {
                 {cashTendered !== '' && <p className={cashChange >= 0 ? 'change-summary' : 'form-error'}>{cashChange >= 0 ? `Tu vuelto: ${money(cashChange)}` : `Faltan ${money(Math.abs(cashChange))} para completar el pago.`}</p>}
               </>}
               <div className="checkout-total"><span>Total del pedido</span><strong>{money(subtotal + delivery)}</strong></div>
-              {notice && <p className="form-error">{notice}</p>}
+              {notice && <p className="form-error" role="alert">{notice}</p>}
               <button className="primary-button checkout-button" disabled={busy || (payment === 'efectivo' && (cashTendered === '' || cashChange < 0))}>{busy ? 'Registrando...' : 'Confirmar pedido'} <ArrowRight size={17} /></button>
               <button type="button" className="back-button" onClick={() => { setCheckout(false); setNotice('') }}>Volver al carrito</button>
             </form>
@@ -571,7 +582,7 @@ export default function App() {
             <div className="confirmation-items">{order.items.map((item, index) => <div key={`${item.nombre}-${index}`}><span><strong>{item.nombre}</strong><small>{item.tamano ? `${item.tamano} · ` : ''}{item.cantidad} × {money(item.precio_unitario)}</small></span><b>{money(item.total)}</b></div>)}</div>
             <div className="confirmation-payment"><span>Pago · {order.metodo_pago === 'efectivo' ? 'Efectivo' : order.metodo_pago === 'yape' ? 'Yape' : 'Tarjeta'}</span>{order.metodo_pago === 'efectivo' && <span>Pagó {money(order.paga_con)} · Vuelto {money(order.vuelto)}</span>}</div>
             <div className="order-total"><span>Total del pedido</span><strong>{money(order.total)}</strong></div>
-            <button className="primary-button" onClick={() => { setOrder(null); setCartOpen(false) }}>Volver a la carta <ArrowRight size={17} /></button>
+            <button className="primary-button" aria-label="Cerrar confirmación y volver a la carta" onClick={() => { setOrder(null); setCartOpen(false) }}>Volver a la carta <ArrowRight size={17} /></button>
           </section>
         </div>
       )}

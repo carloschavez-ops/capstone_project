@@ -4,10 +4,11 @@ import os
 import re
 import unicodedata
 import uuid
+import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory, session
+from flask import Flask, current_app, g, has_request_context, jsonify, request, send_from_directory, session
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -29,17 +30,22 @@ from data import (
 from menu_data import CATEGORY_ORDER, MENU_ITEMS, OBSOLETE_MENU_ITEM_IDS
 from inventory_data import INVENTORY_CATEGORIES, INVENTORY_ITEMS
 from modelos import IngredienteDB, MenuItemDB, PizzaDB, db
-from backend.models import InventarioDB, MermaDB, PedidoDB, UsuarioDB
+from backend.models import ConfiguracionDB, InventarioDB, MermaDB, PedidoDB, UsuarioDB
+from backend import audit  # Registra auditoría ORM en la misma transacción.
+from backend.permissions import current_user, install_permissions, operational_permission, permission_error, ROLE_PERMISSIONS
+from backend.inventory_models import PagoDB, MovimientoStockDB, RecetaConsumoDB
+from backend.security import IntentoAccesoDB, login_limit, record_login, start_session
 
 
 ADMIN_EMAIL = "pizzapronto@gmail.com"
-ADMIN_PASSWORD = "pizzapronto"
+LEGACY_ADMIN_PASSWORD = "pizzapronto"  # Solo para detectar la credencial antigua.
 STORE_ADDRESS = "Av. Manco Cápac 618, Cajamarca 06004"
 ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 DELIVERY_TYPES = {"delivery", "retiro_local", "comer_local"}
 UNIDADES_INVENTARIO = {"unidad", "g", "kg", "ml", "l", "paquete"}
 ACTIVE_ORDER_STATES = {"recibido", "en_preparacion"}
 ORDER_TRANSITIONS = {
+    "recibido": "en_preparacion",
     "en_preparacion": "listo",
     "listo": "entregado",
     "entregado": "pagado",
@@ -55,83 +61,8 @@ CRITICAL_STOCK_MINIMA = {
     "Caja de pizza": 20.0,
 }
 
-# Consumo simulado expresado en la unidad de cada fila de inventario.
-# Los productos y recetas sin entrada mantienen el pedido y generan una advertencia.
-CONSUMO_POR_PRODUCTO = {
-    # Una baguette se considera una porción de Pan al Ajo (5 unidades servidas).
-    "pan-ajo": {"stock-panaderia-masas-y-cereales-04": 1.0},
-}
-
-CONSUMO_POR_INGREDIENTE_Y_TAMANO = {
-    "masa_clasica": {
-        "personal": {"stock-panaderia-masas-y-cereales-06": 0.15},
-        "mediana": {"stock-panaderia-masas-y-cereales-06": 0.25},
-        "familiar": {"stock-panaderia-masas-y-cereales-06": 0.40},
-    },
-    "salsa_tomate": {
-        "personal": {"stock-salsas-condimentos-e-insumos-secos-01": 0.04},
-        "mediana": {"stock-salsas-condimentos-e-insumos-secos-01": 0.06},
-        "familiar": {"stock-salsas-condimentos-e-insumos-secos-01": 0.09},
-    },
-    "mozzarella": {
-        "personal": {"stock-lacteos-y-quesos-01": 0.15},
-        "mediana": {"stock-lacteos-y-quesos-01": 0.25},
-        "familiar": {"stock-lacteos-y-quesos-01": 0.40},
-    },
-    "pepperoni": {
-        "personal": {"stock-carnes-embutidos-y-proteinas-10": 0.04},
-        "mediana": {"stock-carnes-embutidos-y-proteinas-10": 0.07},
-        "familiar": {"stock-carnes-embutidos-y-proteinas-10": 0.11},
-    },
-    "jamon": {
-        "personal": {"stock-carnes-embutidos-y-proteinas-08": 0.04},
-        "mediana": {"stock-carnes-embutidos-y-proteinas-08": 0.07},
-        "familiar": {"stock-carnes-embutidos-y-proteinas-08": 0.10},
-    },
-    "pollo": {
-        "personal": {"stock-carnes-embutidos-y-proteinas-02": 0.05},
-        "mediana": {"stock-carnes-embutidos-y-proteinas-02": 0.08},
-        "familiar": {"stock-carnes-embutidos-y-proteinas-02": 0.12},
-    },
-    "champinones": {
-        "personal": {"stock-verduras-hortalizas-y-hierbas-07": 0.03},
-        "mediana": {"stock-verduras-hortalizas-y-hierbas-07": 0.05},
-        "familiar": {"stock-verduras-hortalizas-y-hierbas-07": 0.08},
-    },
-    "cebolla": {
-        "personal": {"stock-verduras-hortalizas-y-hierbas-03": 0.03},
-        "mediana": {"stock-verduras-hortalizas-y-hierbas-03": 0.05},
-        "familiar": {"stock-verduras-hortalizas-y-hierbas-03": 0.08},
-    },
-    "aceituna": {
-        "personal": {"stock-verduras-hortalizas-y-hierbas-09": 0.02},
-        "mediana": {"stock-verduras-hortalizas-y-hierbas-09": 0.04},
-        "familiar": {"stock-verduras-hortalizas-y-hierbas-09": 0.06},
-    },
-    "albahaca": {
-        "personal": {"stock-verduras-hortalizas-y-hierbas-12": 0.05},
-        "mediana": {"stock-verduras-hortalizas-y-hierbas-12": 0.08},
-        "familiar": {"stock-verduras-hortalizas-y-hierbas-12": 0.12},
-    },
-    "tomate_cherry": {
-        "personal": {"stock-verduras-hortalizas-y-hierbas-02": 0.04},
-        "mediana": {"stock-verduras-hortalizas-y-hierbas-02": 0.07},
-        "familiar": {"stock-verduras-hortalizas-y-hierbas-02": 0.10},
-    },
-    "pina": {
-        "personal": {"stock-frutas-02": 0.10},
-        "mediana": {"stock-frutas-02": 0.18},
-        "familiar": {"stock-frutas-02": 0.28},
-    },
-    "fresa": {
-        "personal": {"stock-frutas-03": 0.05},
-        "mediana": {"stock-frutas-03": 0.08},
-        "familiar": {"stock-frutas-03": 0.12},
-    },
-}
-
-
 def start_orders_after_delay(orders):
+    from backend.order_service import transition_order
     now = datetime.now(timezone.utc)
     changed = False
     for order in orders:
@@ -140,12 +71,21 @@ def start_orders_after_delay(orders):
         created_at = order.creado_en
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
-        if (now - created_at).total_seconds() >= PREPARATION_START_DELAY_SECONDS:
-            order.estado = "en_preparacion"
-            order.preparacion_inicio_en = now
-            changed = True
-    if changed:
-        db.session.commit()
+        if (now - created_at).total_seconds() >= current_app.config["PREPARATION_START_DELAY_SECONDS"]:
+            previous_actor = getattr(g, "audit_actor", None) if has_request_context() else None
+            try:
+                if has_request_context():
+                    g.audit_actor = {"usuario_id": None, "actor": "preparación automática", "rol": "sistema"}
+                transition_order(order.codigo, "en_preparacion")
+            except ValueError as error:
+                db.session.rollback()
+                current = PedidoDB.query.filter_by(codigo=order.codigo).first()
+                if current.estado == "recibido":
+                    current.problema_preparacion = str(error)[:500]
+                    db.session.commit()
+            finally:
+                if has_request_context() and previous_actor is not None:
+                    g.audit_actor = previous_actor
 
 
 def estimate_order_queue(orders):
@@ -168,13 +108,13 @@ def estimate_order_queue(orders):
     first_created = active_orders[0][0].creado_en
     if first_created.tzinfo is None:
         first_created = first_created.replace(tzinfo=timezone.utc)
-    preparation_started_at = first_created + timedelta(seconds=PREPARATION_START_DELAY_SECONDS)
+    preparation_started_at = first_created + timedelta(seconds=current_app.config["PREPARATION_START_DELAY_SECONDS"])
     elapsed_minutes = max(0, (now - preparation_started_at).total_seconds() / 60)
     queued_pizzas = 0
     estimates = {}
     for order, order_pizzas in active_orders:
         queued_pizzas += order_pizzas
-        remaining_minutes = max(0, queued_pizzas * MINUTOS_POR_PIZZA - elapsed_minutes)
+        remaining_minutes = max(0, queued_pizzas * current_app.config["MINUTOS_POR_PIZZA"] - elapsed_minutes)
         estimates[order.id] = math.ceil(remaining_minutes)
     return estimates
 
@@ -218,7 +158,7 @@ def dashboard_period_bounds(period, now=None):
 
 def date_in_range(value, bounds):
     utc_value = as_utc_datetime(value)
-    return bool(utc_value and bounds[0] <= utc_value < bounds[1])
+    return bool(utc_value and (bounds[0] is None or bounds[0] <= utc_value) and (bounds[1] is None or utc_value < bounds[1]))
 
 
 def average_minutes(values):
@@ -313,9 +253,9 @@ def normalize_pizza_dough():
     db.session.commit()
 
 
-def create_app(database_uri=None):
+def create_app(database_uri=None, config=None):
     project_root = Path(__file__).resolve().parents[1]
-    instance_dir = project_root / "instance"
+    instance_dir = Path(os.environ.get("PIZZA_PRONTO_DATA_DIR", project_root / "instance")).resolve()
     app = Flask(
         __name__,
         instance_path=str(instance_dir),
@@ -323,17 +263,47 @@ def create_app(database_uri=None):
     )
     if not database_uri:
         instance_dir.mkdir(parents=True, exist_ok=True)
+    production = os.environ.get("PIZZA_PRONTO_ENV") == "production"
+    secret = os.environ.get("PIZZA_PRONTO_SECRET_KEY")
+    if production and (not secret or len(secret) < 32):
+        raise RuntimeError("Producción requiere PIZZA_PRONTO_SECRET_KEY de al menos 32 caracteres.")
+    if not secret and not database_uri:
+        secret_path = instance_dir / ".session-key"
+        if not secret_path.exists():
+            try:
+                with secret_path.open("x", encoding="utf-8") as secret_file:
+                    secret_file.write(secrets.token_hex(32))
+            except FileExistsError:
+                pass
+        secret = secret_path.read_text(encoding="utf-8").strip()
     database_path = instance_dir / "pizza_pronto.db"
     app.config.update(
         SQLALCHEMY_DATABASE_URI=database_uri or f"sqlite:///{database_path.as_posix()}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         JSON_AS_ASCII=False,
-        SECRET_KEY=os.environ.get("PIZZA_PRONTO_SECRET_KEY", "pizza-pronto-local-dev-key"),
+        DEBUG=False,
+        SECRET_KEY=secret or secrets.token_hex(32),
+        TESTING=database_uri == "sqlite://",
+        INITIALIZING=True,
+        PRODUCTION=production,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=production,
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+        CSRF_ENABLED=database_uri != "sqlite://",
+        SESSION_IDLE_SECONDS=1800,
+        SESSION_ABSOLUTE_SECONDS=28800,
+        LOGIN_MAX_ATTEMPTS=5,
+        LOGIN_WINDOW_SECONDS=900,
+        PREPARATION_START_DELAY_SECONDS=10,
+        MINUTOS_POR_PIZZA=8,
         MAX_CONTENT_LENGTH=5 * 1024 * 1024,
-        UPLOAD_FOLDER=os.path.join(os.path.dirname(__file__), "uploads"),
+        UPLOAD_FOLDER=str(Path(os.environ.get("PIZZA_PRONTO_UPLOAD_DIR", project_root / "backend" / "uploads")).resolve()),
+        BACKUP_FOLDER=str(instance_dir / "backups"),
+        FRONTEND_DIST=str(project_root / "frontend" / "dist"),
     )
+    if config:
+        app.config.update(config)
     db.init_app(app)
 
     with app.app_context():
@@ -342,6 +312,10 @@ def create_app(database_uri=None):
         if "rol" not in user_columns:
             with db.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE usuarios ADD COLUMN rol VARCHAR(20) NOT NULL DEFAULT 'cliente'"))
+        for column_name, column_type in {"activo": "BOOLEAN NOT NULL DEFAULT 1", "session_version": "INTEGER NOT NULL DEFAULT 1"}.items():
+            if column_name not in user_columns:
+                with db.engine.begin() as connection:
+                    connection.execute(text(f"ALTER TABLE usuarios ADD COLUMN {column_name} {column_type}"))
         order_columns = {column["name"] for column in inspect(db.engine).get_columns("pedidos")}
         order_migrations = {
             "referencia": "VARCHAR(300) NOT NULL DEFAULT ''",
@@ -354,6 +328,13 @@ def create_app(database_uri=None):
             "listo_en": "DATETIME",
             "entregado_en": "DATETIME",
             "pagado_en": "DATETIME",
+            "usuario_id": "INTEGER",
+            "invitado_token": "VARCHAR(80)",
+            "stock_estado": "VARCHAR(20) NOT NULL DEFAULT 'legacy'",
+            "plan_consumo_json": "TEXT NOT NULL DEFAULT '[]'",
+            "problema_preparacion": "VARCHAR(500) NOT NULL DEFAULT ''",
+            "anulado_en": "DATETIME",
+            "motivo_anulacion": "VARCHAR(500) NOT NULL DEFAULT ''",
         }
         for column_name, column_type in order_migrations.items():
             if column_name not in order_columns:
@@ -388,17 +369,41 @@ def create_app(database_uri=None):
             if column_name not in menu_columns:
                 with db.engine.begin() as connection:
                     connection.execute(text(f"ALTER TABLE menu_items ADD COLUMN {column_name} {column_type}"))
-        sembrar_si_hace_falta()
-        seed_menu_items()
-        normalize_pizza_dough()
+        first_catalog_setup = db.session.get(ConfiguracionDB, "catalogo_inicial_v1") is None
+        if first_catalog_setup:
+            sembrar_si_hace_falta()
+            seed_menu_items()
+            normalize_pizza_dough()
+            seed_inventory()
+            db.session.add(ConfiguracionDB(clave="catalogo_inicial_v1", valor="inicializado"))
+            db.session.commit()
         cargar_desde_bd()
+        stored_times = db.session.get(ConfiguracionDB, "tiempos_pedidos_v1")
+        if stored_times:
+            app.config.update(json.loads(stored_times.valor))
+        from backend.inventory import ensure_demo_recipes
+        ensure_demo_recipes()
+        for paid in PedidoDB.query.filter_by(estado="pagado").all():
+            if PagoDB.query.filter_by(pedido_id=paid.id).first() is None:
+                db.session.add(PagoDB(pedido_id=paid.id, importe=paid.total, metodo=paid.metodo_pago,
+                                      registrado_en=paid.pagado_en or paid.creado_en, origen="migracion"))
+        db.session.commit()
 
-        admin = UsuarioDB.query.filter_by(email=ADMIN_EMAIL).first()
+        admin_email = os.environ.get("PIZZA_PRONTO_ADMIN_EMAIL", ADMIN_EMAIL).strip().lower()
+        admin = UsuarioDB.query.filter_by(rol="admin").first() if production else UsuarioDB.query.filter_by(email=admin_email).first()
         if admin is None:
+            admin_password = os.environ.get("PIZZA_PRONTO_ADMIN_PASSWORD") or ("" if production else app.config.get("BOOTSTRAP_ADMIN_PASSWORD") or secrets.token_urlsafe(18))
+            if len(admin_password) < (12 if production else 8):
+                raise RuntimeError("Configura PIZZA_PRONTO_ADMIN_PASSWORD con al menos 12 caracteres para crear al administrador.")
+            app.config["BOOTSTRAP_ADMIN_PASSWORD"] = admin_password
+            if not production and not database_uri and not os.environ.get("PIZZA_PRONTO_ADMIN_PASSWORD"):
+                password_file = instance_dir / ".admin-password"
+                password_file.write_text(admin_password, encoding="utf-8")
+                app.logger.warning("Administrador local creado. Consulta su clave privada en %s", password_file)
             admin = UsuarioDB(
                 nombre="Administrador",
-                email=ADMIN_EMAIL,
-                password_hash=generate_password_hash(ADMIN_PASSWORD),
+                email=admin_email,
+                password_hash=generate_password_hash(admin_password),
                 rol="admin",
             )
             db.session.add(admin)
@@ -406,18 +411,30 @@ def create_app(database_uri=None):
                 db.session.commit()
             except IntegrityError:
                 db.session.rollback()
-                admin = UsuarioDB.query.filter_by(email=ADMIN_EMAIL).first()
+                admin = UsuarioDB.query.filter_by(email=admin_email).first()
                 if admin is None:
                     raise
-        elif admin.rol != "admin":
-            admin.rol = "admin"
-            admin.password_hash = generate_password_hash(ADMIN_PASSWORD)
-            db.session.commit()
+        if admin.rol != "admin":
+            raise RuntimeError("El correo inicial pertenece a un cliente. Configura otro PIZZA_PRONTO_ADMIN_EMAIL para el administrador.")
+        if production and any(check_password_hash(account.password_hash, LEGACY_ADMIN_PASSWORD)
+                              for account in UsuarioDB.query.filter_by(rol="admin", activo=True).all()):
+            raise RuntimeError("Cambia la contraseña inicial con python -m backend.maintenance set-admin-password antes de producción.")
 
-        seed_inventory()
+    app.config["INITIALIZING"] = False
+    from backend.security import install_security
+    from backend.operations import operations
+    install_security(app)
+    install_permissions(app)
+    app.register_blueprint(operations)
+    from backend.inventory import recipes
+    from backend.reports import reports
+    app.register_blueprint(recipes)
+    app.register_blueprint(reports)
 
     def auth_response(user=None, mode="account"):
         profile = user.to_dict() if user else {"nombre": "Invitado", "email": None}
+        if user:
+            profile["permisos"] = ROLE_PERMISSIONS.get(user.rol, [])
         return {"authenticated": True, "mode": mode, "user": profile}
 
     def normalize_customer(payload):
@@ -459,82 +476,18 @@ def create_app(database_uri=None):
         return customer, None
 
     def current_account():
-        user_id = session.get("user_id")
-        return db.session.get(UsuarioDB, user_id) if user_id else None
+        return current_user()
 
     def has_valid_session():
         if session.get("guest"):
             return True
-        user_id = session.get("user_id")
-        if user_id and db.session.get(UsuarioDB, user_id):
+        if current_user():
             return True
         session.clear()
         return False
 
     def admin_error():
-        user = current_account()
-        if user is None:
-            return jsonify({"error": "Inicia sesión para continuar."}), 401
-        if user.rol != "admin":
-            return jsonify({"error": "No tienes permisos para administrar el menú."}), 403
-        return None
-
-    def consume_soft_inventory(requested_items):
-        def apply_consumption(stock_item_id, amount, order_quantity, source):
-            stock = InventarioDB.query.filter_by(
-                tipo="ingrediente",
-                item_id=stock_item_id,
-            ).first()
-            if stock is None:
-                app.logger.warning(
-                    "Inventario blando: no existe el insumo %s mapeado para %s; "
-                    "el pedido continuara.",
-                    stock_item_id,
-                    source,
-                )
-                return
-
-            consumed = amount * order_quantity
-            stock.cantidad = round(stock.cantidad - consumed, 4)
-            if stock.cantidad < 0:
-                app.logger.warning(
-                    "Inventario blando: %s quedo en %.4f %s tras procesar %s; "
-                    "el pedido continuara.",
-                    stock.nombre,
-                    stock.cantidad,
-                    stock.unidad,
-                    source,
-                )
-
-        for requested in requested_items:
-            quantity = int(requested.get("cantidad", 1))
-            menu_item_id = requested.get("menu_item_id")
-            if menu_item_id:
-                product_consumption = CONSUMO_POR_PRODUCTO.get(menu_item_id)
-                if product_consumption is None:
-                    app.logger.warning(
-                        "Inventario blando: no hay receta de consumo para el producto %s; "
-                        "el pedido continuara.",
-                        menu_item_id,
-                    )
-                    continue
-                for stock_item_id, amount in product_consumption.items():
-                    apply_consumption(stock_item_id, amount, quantity, menu_item_id)
-                continue
-
-            size_id = requested.get("tamano_id", "mediana")
-            for ingredient_id in requested.get("ingredientes", []):
-                ingredient_consumption = CONSUMO_POR_INGREDIENTE_Y_TAMANO.get(ingredient_id)
-                if ingredient_consumption is None or size_id not in ingredient_consumption:
-                    app.logger.warning(
-                        "Inventario blando: no hay receta de consumo para el ingrediente %s "
-                        "en tamano %s; el pedido continuara.",
-                        ingredient_id,
-                        size_id,
-                    )
-                    continue
-                for stock_item_id, amount in ingredient_consumption[size_id].items():
-                    apply_consumption(stock_item_id, amount, quantity, ingredient_id)
+        return permission_error(operational_permission())
 
     @app.get("/api/health")
     def health():
@@ -548,8 +501,7 @@ def create_app(database_uri=None):
                 session.clear()
                 return jsonify({"authenticated": False})
             return jsonify({**auth_response(mode="guest"), "cliente": customer})
-        user_id = session.get("user_id")
-        user = db.session.get(UsuarioDB, user_id) if user_id else None
+        user = current_user()
         if user:
             return jsonify(auth_response(user))
         session.clear()
@@ -579,6 +531,9 @@ def create_app(database_uri=None):
             return jsonify({"error": "Ya existe una cuenta con ese correo."}), 409
         session.clear()
         session["user_id"] = user.id
+        session["session_version"] = user.session_version
+        session.permanent = True
+        start_session()
         return jsonify(auth_response(user)), 201
 
     @app.post("/api/auth/login")
@@ -586,11 +541,19 @@ def create_app(database_uri=None):
         payload = request.get_json(silent=True) or {}
         email = str(payload.get("email", "")).strip().lower()
         password = str(payload.get("password", ""))
+        limited = login_limit(email)
+        if limited:
+            return limited
         user = UsuarioDB.query.filter(db.func.lower(UsuarioDB.email) == email).first()
-        if not user or not check_password_hash(user.password_hash, password):
+        if not user or not user.activo or not check_password_hash(user.password_hash, password):
+            record_login(email, False)
             return jsonify({"error": "Correo o contraseña incorrectos."}), 401
+        record_login(email, True)
         session.clear()
         session["user_id"] = user.id
+        session["session_version"] = user.session_version
+        session.permanent = True
+        start_session()
         return jsonify(auth_response(user))
 
     @app.post("/api/auth/guest")
@@ -601,7 +564,10 @@ def create_app(database_uri=None):
             return jsonify({"error": error}), 400
         session.clear()
         session["guest"] = True
+        session["guest_token"] = secrets.token_urlsafe(32)
         session["guest_customer"] = customer
+        session.permanent = True
+        start_session()
         return jsonify({**auth_response(mode="guest"), "cliente": customer})
 
     @app.post("/api/auth/logout")
@@ -705,6 +671,8 @@ def create_app(database_uri=None):
         )
         db.session.add(pizza)
         db.session.commit()
+        from backend.inventory import ensure_demo_recipes
+        ensure_demo_recipes()
         return jsonify({"pizza": pizza.to_dict()}), 201
 
     @app.get("/api/uploads/<path:filename>")
@@ -724,7 +692,7 @@ def create_app(database_uri=None):
             order_data = order.to_dict()
             order_data["estimado_minutos"] = estimates.get(order.id)
             result.append(order_data)
-        return jsonify({"pedidos": result})
+        return jsonify({"pedidos": result, "tiempos": {"inicio_segundos": app.config["PREPARATION_START_DELAY_SECONDS"], "minutos_por_pizza": app.config["MINUTOS_POR_PIZZA"]}})
 
     @app.get("/api/admin/dashboard")
     def admin_dashboard():
@@ -734,11 +702,18 @@ def create_app(database_uri=None):
         period = request.args.get("period", "today")
         try:
             bounds, comparison_bounds = dashboard_period_bounds(period)
+            from backend.reports import report_filters, selected_order
+            state_filter, custom_bounds = report_filters(request.args)
+            if any(custom_bounds):
+                bounds = tuple(value.replace(tzinfo=timezone.utc) if value else None for value in custom_bounds)
+                comparison_bounds = None
         except ValueError:
             return jsonify({"error": "Periodo no válido."}), 400
 
         all_orders = PedidoDB.query.order_by(PedidoDB.creado_en.asc()).all()
-        period_orders = [order for order in all_orders if date_in_range(order.creado_en, bounds)]
+        period_orders = [order for order in all_orders if (not state_filter or order.estado == state_filter) and
+                         (not bounds[0] or as_utc_datetime(order.creado_en) >= bounds[0]) and
+                         (not bounds[1] or as_utc_datetime(order.creado_en) < bounds[1])]
         paid_orders = [order for order in period_orders if order.estado == "pagado"]
         sales_total = round(sum(order.total for order in paid_orders), 2)
         ticket_average = round(sales_total / len(paid_orders), 2) if paid_orders else None
@@ -892,7 +867,7 @@ def create_app(database_uri=None):
 
         comparison = None
         if comparison_bounds:
-            previous_orders = [order for order in all_orders if order.estado == "pagado" and date_in_range(order.creado_en, comparison_bounds)]
+            previous_orders = [order for order in all_orders if (not state_filter or state_filter == "pagado") and order.estado == "pagado" and date_in_range(order.creado_en, comparison_bounds)]
             previous_sales = round(sum(order.total for order in previous_orders), 2)
             comparison = {
                 "ventas": previous_sales,
@@ -906,8 +881,10 @@ def create_app(database_uri=None):
                 "ventas": sales_total,
                 "pedidos": len(paid_orders),
                 "pedidos_totales": len(period_orders),
+                "anulaciones": sum(order.estado == "anulado" for order in period_orders),
+                "importe_anulado": round(sum(order.total for order in period_orders if order.estado == "anulado"), 2),
                 "ticket_promedio": ticket_average,
-                "clientes_nuevos": len(first_dates_in_period),
+                "clientes_nuevos": len(period_customers & set(first_dates_in_period)),
                 "clientes_recurrentes": returning_customers,
             },
             "comparacion": comparison,
@@ -979,26 +956,20 @@ def create_app(database_uri=None):
         error = admin_error()
         if error:
             return error
-        order = PedidoDB.query.filter_by(codigo=codigo).first()
-        if order is None:
-            return jsonify({"error": "No se encontró ese pedido."}), 404
-        next_state = ORDER_TRANSITIONS.get(order.estado)
-        requested_state = (request.get_json(silent=True) or {}).get("estado")
-        if requested_state != next_state:
-            return jsonify({"error": "El pedido debe avanzar al siguiente estado disponible."}), 400
-        order.estado = requested_state
-        state_time = datetime.now(timezone.utc)
-        if requested_state == "en_preparacion":
-            order.preparacion_inicio_en = state_time
-        elif requested_state == "listo":
-            if order.preparacion_inicio_en is None:
-                order.preparacion_inicio_en = order.creado_en
-            order.listo_en = state_time
-        elif requested_state == "entregado":
-            order.entregado_en = state_time
-        elif requested_state == "pagado":
-            order.pagado_en = state_time
-        db.session.commit()
+        from backend.order_service import transition_order
+        from backend.inventory import StockError
+        values = request.get_json(silent=True) or {}
+        try:
+            order = transition_order(codigo, values.get("estado"), values.get("motivo", ""))
+        except LookupError as error:
+            db.session.rollback()
+            return jsonify({"error": str(error)}), 404
+        except StockError as error:
+            db.session.rollback()
+            return jsonify({"error": str(error)}), 409
+        except ValueError as error:
+            db.session.rollback()
+            return jsonify({"error": str(error)}), 400
         return jsonify({"pedido": order.to_dict()})
 
     @app.get("/api/admin/inventory")
@@ -1067,8 +1038,12 @@ def create_app(database_uri=None):
         unit = "unidad" if item_type == "pizza" else payload.get("unidad")
         if unit not in UNIDADES_INVENTARIO:
             return jsonify({"error": "La unidad de medida no es válida."}), 400
+        from backend.inventory import convert_quantity
+        try:
+            quantity = convert_quantity(payload.get("cantidad"), unit, item.unidad)
+        except ValueError as conversion_error:
+            return jsonify({"error": str(conversion_error)}), 400
         item.cantidad = quantity
-        item.unidad = unit
         db.session.commit()
         return jsonify({"item": item.to_dict()})
 
@@ -1150,6 +1125,8 @@ def create_app(database_uri=None):
         name = str(payload.get("nombre", "")).strip()
         description = str(payload.get("descripcion", "")).strip()
         price_value = payload.get("precio")
+        if price_value is None:
+            price_value = payload.get("precio_personal")
         if price_value is None and "precio_unitario" in payload:
             price_value = payload.get("precio_unitario")
 
@@ -1173,12 +1150,22 @@ def create_app(database_uri=None):
         elif payload.get("imagen"):
             item.imagen = str(payload["imagen"]).strip()
 
+        size_prices = {}
+        if item.es_pizza:
+            try:
+                for size in ("mediana", "familiar"):
+                    raw = payload.get(f"precio_{size}", getattr(item, f"precio_{size}"))
+                    size_prices[size] = float(raw) if raw is not None else None
+                    if size_prices[size] is not None and (not math.isfinite(size_prices[size]) or size_prices[size] < 0):
+                        raise ValueError()
+            except (ValueError, TypeError):
+                return jsonify({"error": "Los precios por tamaño deben ser números finitos no negativos."}), 400
         item.nombre = name
         item.descripcion = description
         item.precio = price
         if item.es_pizza:
-            item.precio_mediana = payload.get("precio_mediana")
-            item.precio_familiar = payload.get("precio_familiar")
+            item.precio_mediana = size_prices["mediana"]
+            item.precio_familiar = size_prices["familiar"]
         db.session.commit()
         return jsonify({"item": item.to_dict()})
 
@@ -1300,7 +1287,7 @@ def create_app(database_uri=None):
                 quantity = int(requested.get("cantidad", 1))
             except (TypeError, ValueError):
                 quantity = 0
-            if quantity < 1 or quantity > 20:
+            if isinstance(requested.get("cantidad", 1), bool) or quantity != requested.get("cantidad", 1) or quantity < 1 or quantity > 20:
                 return jsonify({"error": "La cantidad debe estar entre 1 y 20."}), 400
             if menu_item_id:
                 menu_item = MenuItemDB.query.filter_by(id=menu_item_id, activo=True).first()
@@ -1354,6 +1341,8 @@ def create_app(database_uri=None):
                     "ingredientes": [item["nombre"] for item in priced["detalle"]],
                     "extras": [item["nombre"] for item in priced["detalle"] if not item["incluido"]],
                     "es_pizza": True,
+                    "ingredientes_ids": ingredient_ids,
+                    "pizza_id": pizza_id,
                     "cantidad": quantity,
                     "precio_unitario": priced["total"],
                     "total": round(priced["total"] * quantity, 2),
@@ -1393,7 +1382,14 @@ def create_app(database_uri=None):
             paga_con=paid_amount,
             vuelto=change,
         )
-        consume_soft_inventory(requested_items)
+        from backend.inventory import build_consumption_plan
+        try:
+            order.plan_consumo_json = json.dumps(build_consumption_plan(items))
+        except ValueError as recipe_error:
+            return jsonify({"error": str(recipe_error)}), 409
+        account = current_account()
+        order.usuario_id = account.id if account else None
+        order.invitado_token = session.get("guest_token") if not account else None
         db.session.add(order)
         db.session.commit()
         active_orders = PedidoDB.query.filter(PedidoDB.estado.in_(ACTIVE_ORDER_STATES)).all()
@@ -1402,12 +1398,41 @@ def create_app(database_uri=None):
         order_data["estimado_minutos"] = estimate
         return jsonify({"pedido": order_data}), 201
 
+    @app.get("/api/orders/<codigo>")
+    def get_customer_order(codigo):
+        if not has_valid_session():
+            return jsonify({"error": "Inicia sesión para consultar tu pedido."}), 401
+        account = current_account()
+        order = PedidoDB.query.filter_by(codigo=codigo).first()
+        allowed = order and ((account and (account.rol == "admin" or order.usuario_id == account.id)) or
+                              (not account and order.invitado_token and order.invitado_token == session.get("guest_token")))
+        if not allowed:
+            return jsonify({"error": "Pedido no encontrado."}), 404
+        return jsonify({"pedido": order.to_dict()})
+
     @app.errorhandler(404)
     def not_found(_error):
         return jsonify({"error": "Ruta no encontrada."}), 404
+
+    @app.errorhandler(413)
+    def upload_too_large(_error):
+        return jsonify({"error": "La imagen no puede superar 5 MB."}), 413
+
+    @app.get("/")
+    @app.get("/<path:asset>")
+    def frontend(asset="index.html"):
+        if asset.startswith("api/"):
+            return jsonify({"error": "Ruta no encontrada."}), 404
+        dist = Path(app.config["FRONTEND_DIST"])
+        if not (dist / "index.html").is_file():
+            return jsonify({"error": "Compila el frontend con npm run build dentro de frontend."}), 503
+        if asset != "index.html" and not (dist / asset).is_file():
+            return jsonify({"error": "Recurso no encontrado."}), 404
+        return send_from_directory(dist, asset)
 
     return app
 
 
 if __name__ == "__main__":
-    create_app().run(host="127.0.0.1", port=5000, debug=True)
+    from backend.serve import main
+    main()

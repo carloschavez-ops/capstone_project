@@ -3,6 +3,8 @@ import { ArrowLeft, Check, Clock3, Plus, RefreshCw, Save } from 'lucide-react'
 import './admin-orders.css'
 import PizzaCreateForm from './PizzaCreateForm.jsx'
 import AdminDashboard from './AdminDashboard.jsx'
+import OperationsPanel from './OperationsPanel.jsx'
+import { apiFetch as fetch, apiJson } from './api.js'
 
 const UNITS = ['unidad', 'g', 'kg', 'ml', 'l', 'paquete']
 const ORDER_STATES = {
@@ -11,8 +13,10 @@ const ORDER_STATES = {
   listo: 'Listo',
   entregado: 'Entregado',
   pagado: 'Pagado',
+  anulado: 'Anulado',
 }
 const ORDER_ACTIONS = {
+  recibido: { estado: 'en_preparacion', label: 'Iniciar preparación' },
   en_preparacion: { estado: 'listo', label: 'Marcar lista' },
   listo: { estado: 'entregado', label: 'Confirmar entrega' },
   entregado: { estado: 'pagado', label: 'Registrar pago' },
@@ -22,7 +26,9 @@ function formatOrderDate(value) {
   return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
-export default function AdminPanel({ onBack, onPizzaCreated }) {
+export default function AdminPanel({ user, onBack, onPizzaCreated }) {
+  const isAdmin = user?.rol === 'admin'
+  const canViewStock = isAdmin || user?.rol === 'cocina'
   const [inventory, setInventory] = useState({ categorias: [], ingredientes: [] })
   const [orders, setOrders] = useState([])
   const [activeTab, setActiveTab] = useState('pedidos')
@@ -34,6 +40,9 @@ export default function AdminPanel({ onBack, onPizzaCreated }) {
   const [adding, setAdding] = useState(false)
   const [pizzaFormOpen, setPizzaFormOpen] = useState(false)
   const [updatingCode, setUpdatingCode] = useState('')
+  const [times, setTimes] = useState({ inicio_segundos: 10, minutos_por_pizza: 8 })
+  const [draftTimes, setDraftTimes] = useState(null)
+  const [cancelReasons, setCancelReasons] = useState({})
   const hasReceivedOrders = orders.some((order) => order.estado === 'recibido')
 
   async function loadOrders() {
@@ -43,6 +52,7 @@ export default function AdminPanel({ onBack, onPizzaCreated }) {
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'No se pudieron cargar los pedidos.')
       setOrders(result.pedidos)
+      if (result.tiempos) setTimes(result.tiempos)
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -151,32 +161,38 @@ export default function AdminPanel({ onBack, onPizzaCreated }) {
       <div className="admin-page-heading">
         <button className="admin-back" onClick={onBack}><ArrowLeft size={16} /> Volver a la carta</button>
         <p className="eyebrow">GESTIÓN DE COCINA</p>
-        <h1>Panel admin<span>.</span></h1>
+        <h1>{isAdmin ? 'Panel admin' : user?.rol === 'cocina' ? 'Cocina' : 'Caja'}<span>.</span></h1>
         <p>Pedidos, preparación y stock del local.</p>
-        <button className="admin-add-pizza" onClick={() => setPizzaFormOpen(true)}><Plus size={16} /> Agregar pizza</button>
+        {isAdmin && <button className="admin-add-pizza" onClick={() => setPizzaFormOpen(true)}><Plus size={16} /> Agregar pizza</button>}
       </div>
 
       {error && <p className="admin-error" role="alert">{error}</p>}
       {saved && <p className="admin-saved" role="status"><Check size={15} /> Cambios guardados</p>}
-      <div className="admin-tabs" role="tablist" aria-label="Administración">
-        <button role="tab" aria-selected={activeTab === 'pedidos'} className={activeTab === 'pedidos' ? 'active' : ''} onClick={() => setActiveTab('pedidos')}>Pedidos <span>{orders.filter((order) => order.estado !== 'pagado').length}</span></button>
-        <button role="tab" aria-selected={activeTab === 'inventario'} className={activeTab === 'inventario' ? 'active' : ''} onClick={() => setActiveTab('inventario')}>Inventario</button>
-        <button role="tab" aria-selected={activeTab === 'dashboard'} className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>Dashboard</button>
+      <div className="admin-tabs" role="group" aria-label="Administración">
+        <button aria-pressed={activeTab === 'pedidos'} className={activeTab === 'pedidos' ? 'active' : ''} onClick={() => setActiveTab('pedidos')}>Pedidos <span>{orders.filter((order) => order.estado !== 'pagado').length}</span></button>
+        {canViewStock && <button aria-pressed={activeTab === 'inventario'} className={activeTab === 'inventario' ? 'active' : ''} onClick={() => setActiveTab('inventario')}>Inventario</button>}
+        {isAdmin && <button aria-pressed={activeTab === 'dashboard'} className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>Dashboard</button>}
+        {isAdmin && ['Personal', 'Recetas', 'Reportes', 'Auditoría', 'Respaldos', 'Piloto', 'Indicadores'].map((tab) => <button key={tab} aria-pressed={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}
       </div>
 
-      {activeTab === 'dashboard' ? <AdminDashboard /> : activeTab === 'pedidos' ? (
+      {['Personal', 'Recetas', 'Reportes', 'Auditoría', 'Respaldos', 'Piloto', 'Indicadores'].includes(activeTab) && isAdmin ? <OperationsPanel section={activeTab} /> : activeTab === 'dashboard' ? <AdminDashboard /> : activeTab === 'pedidos' ? (
         <section className="admin-orders-section" aria-label="Pedidos recibidos">
           <header className="admin-orders-heading">
             <div><p className="eyebrow">COCINA Y CAJA</p><h2>Pedidos</h2></div>
             <button className="orders-refresh" onClick={loadOrders} disabled={ordersLoading} aria-label="Actualizar pedidos" title="Actualizar pedidos"><RefreshCw size={16} /></button>
           </header>
-          <p className="orders-estimate-note"><Clock3 size={14} /> Estimado orientativo: 8 minutos por pizza en la cola.</p>
+          <p className="orders-estimate-note"><Clock3 size={14} /> Estimado orientativo: {times.minutos_por_pizza} minutos por pizza. Inicio automático después de {times.inicio_segundos} segundos, si hay stock.</p>
+          {isAdmin && <details className="ops-panel"><summary>Configurar tiempos de preparación</summary><form className="ops-form" onSubmit={async (e) => {
+            e.preventDefault()
+            try { await apiJson('/api/admin/order-settings', { method: 'PUT', body: draftTimes || times }); setDraftTimes(null); await loadOrders(); setSaved('tiempos') } catch (failure) { setError(failure.message) }
+          }}><label>Espera para iniciar (segundos)<input type="number" min="0" max="3600" value={(draftTimes || times).inicio_segundos} onChange={(e) => setDraftTimes({ ...(draftTimes || times), inicio_segundos: Number(e.target.value) })} /></label><label>Minutos por pizza<input type="number" min="1" max="120" value={(draftTimes || times).minutos_por_pizza} onChange={(e) => setDraftTimes({ ...(draftTimes || times), minutos_por_pizza: Number(e.target.value) })} /></label><button>Guardar tiempos</button></form></details>}
           {ordersLoading ? <p className="admin-loading">Cargando pedidos...</p> : orders.length === 0 ? (
             <p className="orders-empty">Todavía no hay pedidos.</p>
           ) : (
             <div className="admin-order-list">
               {orders.map((order) => {
-                const action = ORDER_ACTIONS[order.estado]
+                const candidate = ORDER_ACTIONS[order.estado]
+                const action = candidate && (isAdmin || (user?.rol === 'cocina' && ['en_preparacion', 'listo'].includes(candidate.estado)) || (user?.rol === 'caja' && ['entregado', 'pagado'].includes(candidate.estado))) ? candidate : null
                 const itemCount = order.items.reduce((sum, item) => sum + item.cantidad, 0)
                 return (
                   <article className="admin-order" key={order.codigo}>
@@ -192,6 +208,12 @@ export default function AdminPanel({ onBack, onPizzaCreated }) {
                     <ul className="admin-order-items">
                       {order.items.map((item, index) => <li key={`${item.nombre}-${index}`}><span>{item.cantidad} × {item.nombre} <small>{item.tamano}</small></span><strong>S/ {Number(item.total).toFixed(2)}</strong></li>)}
                     </ul>
+                    {order.problema_preparacion && <p role="alert" className="admin-error">{order.problema_preparacion}</p>}
+                    {order.motivo_anulacion && <p>Anulado: {order.motivo_anulacion}</p>}
+                    {isAdmin && ['recibido', 'en_preparacion', 'listo'].includes(order.estado) && <details className="ops-panel"><summary>Anular pedido</summary><form className="ops-form" onSubmit={async (e) => {
+                      e.preventDefault(); setUpdatingCode(order.codigo)
+                      try { await apiJson(`/api/admin/orders/${encodeURIComponent(order.codigo)}`, { method: 'PATCH', body: { estado: 'anulado', motivo: cancelReasons[order.codigo] || '' } }); await loadOrders() } catch (failure) { setError(failure.message) } finally { setUpdatingCode('') }
+                    }}><label>Motivo de anulación<input required maxLength={500} value={cancelReasons[order.codigo] || ''} onChange={(e) => setCancelReasons({ ...cancelReasons, [order.codigo]: e.target.value })} /></label><button disabled={updatingCode === order.codigo}>Anular y revertir consumo</button></form></details>}
                     <div className="admin-order-bottom">
                       <div className="admin-order-total"><span>{itemCount} {itemCount === 1 ? 'artículo' : 'artículos'} · {order.metodo_pago}</span><strong>S/ {Number(order.total).toFixed(2)}</strong></div>
                       {order.estado === 'pagado' ? <span className="order-paid"><Check size={15} /> Pago registrado</span> : <div className="admin-order-controls">
@@ -211,13 +233,13 @@ export default function AdminPanel({ onBack, onPizzaCreated }) {
         <div className="inventory-sections">
           <section className="inventory-section">
             <header><div><p className="eyebrow">STOCK DEL LOCAL</p><h2>Inventario</h2></div><span>{inventory.ingredientes.length} insumos</span></header>
-            <form className="new-inventory-form" onSubmit={addIngredient}>
+            {isAdmin && <form className="new-inventory-form" onSubmit={addIngredient}>
               <label>Nuevo insumo<input required maxLength={120} placeholder="Nombre del insumo" value={newItem.nombre} onChange={(event) => setNewItem({ ...newItem, nombre: event.target.value })} /></label>
               <label>Categoría<select value={newItem.categoria} onChange={(event) => setNewItem({ ...newItem, categoria: event.target.value })}>{inventory.categorias.map((category) => <option key={category} value={category}>{category}</option>)}{!inventory.categorias.includes('Otros') && <option value="Otros">Otros</option>}</select></label>
               <label>Unidad<select value={newItem.unidad} onChange={(event) => setNewItem({ ...newItem, unidad: event.target.value })}>{UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
               <label>Cantidad inicial<input required type="number" min="0" step="any" value={newItem.cantidad} onChange={(event) => setNewItem({ ...newItem, cantidad: event.target.value })} /></label>
               <button className="primary-button" disabled={adding}><Plus size={16} /> Agregar insumo</button>
-            </form>
+            </form>}
           </section>
           {inventory.categorias.map((category) => {
             const items = inventory.ingredientes.filter((item) => item.categoria === category)
@@ -229,9 +251,9 @@ export default function AdminPanel({ onBack, onPizzaCreated }) {
                 {items.map((item) => (
                   <div className="inventory-row" key={item.item_id}>
                     <strong>{item.nombre}</strong>
-                    <input aria-label={`Cantidad de ${item.nombre}`} type="number" min="0" step="any" value={item.cantidad} onChange={(event) => updateRow(item.item_id, { cantidad: event.target.value })} />
-                    <select aria-label={`Unidad de ${item.nombre}`} value={item.unidad} onChange={(event) => updateRow(item.item_id, { unidad: event.target.value })}>{UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select>
-                    <button className="save-stock" onClick={() => saveRow(item)} aria-label={`Guardar ${item.nombre}`} title="Guardar"><Save size={16} /></button>
+                    <input disabled={!isAdmin} aria-label={`Cantidad de ${item.nombre}`} type="number" min="0" step="any" value={item.cantidad} onChange={(event) => updateRow(item.item_id, { cantidad: event.target.value })} />
+                    <select disabled={!isAdmin} aria-label={`Unidad de ${item.nombre}`} value={item.unidad} onChange={(event) => updateRow(item.item_id, { unidad: event.target.value })}>{UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select>
+                    {isAdmin && <button className="save-stock" onClick={() => saveRow(item)} aria-label={`Guardar ${item.nombre}`} title="Guardar"><Save size={16} /></button>}
                   </div>
                 ))}
               </div>

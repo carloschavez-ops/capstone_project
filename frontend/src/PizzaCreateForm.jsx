@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { apiFetch as fetch } from './api.js'
 import { ArrowRight, ImagePlus, X } from 'lucide-react'
 
 const TYPES = ['Italianas · 8 porciones', 'Personales', 'Familiares', 'Postre']
 
 export default function PizzaCreateForm({ onClose, onCreated, mode = 'create', initialPizza = null }) {
-  const isMenuProduct = mode === 'menu-edit'
+  const isMenuEntry = typeof initialPizza?.es_pizza === 'boolean'
+  const isMenuProduct = mode === 'menu-edit' || (isMenuEntry && !initialPizza?.precios)
   const [image, setImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(initialPizza?.imagen || '')
   const [busy, setBusy] = useState(false)
@@ -77,7 +79,7 @@ export default function PizzaCreateForm({ onClose, onCreated, mode = 'create', i
     try {
       const isEditMode = mode === 'edit' || mode === 'menu-edit'
       const endpoint = isEditMode
-        ? (isMenuProduct ? `/api/admin/menu-items/${encodeURIComponent(initialPizza.id)}` : `/api/admin/pizzas/${encodeURIComponent(initialPizza.id)}`)
+        ? (isMenuEntry ? `/api/admin/menu-items/${encodeURIComponent(initialPizza.id)}` : `/api/admin/pizzas/${encodeURIComponent(initialPizza.id)}`)
         : '/api/admin/pizzas'
       const response = await fetch(endpoint, { method: isEditMode ? 'PUT' : 'POST', body: form })
       const result = await response.json()

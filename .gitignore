@@ -6,3 +6,6 @@ backend/uploads/
 frontend/node_modules/
 frontend/dist/
 instance/
+.tmp/
+backend/uploads.pre-restore-*/
+backend/uploads.staged-*/

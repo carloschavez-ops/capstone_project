@@ -1,0 +1,5 @@
+# Sustituir pizza.example.com por el dominio real con DNS apuntando al servidor.
+pizza.example.com {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:5000
+}

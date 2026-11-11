@@ -4,6 +4,18 @@ from datetime import datetime, timezone
 from modelos import db
 
 
+def utc_iso(value):
+    if value is None:
+        return None
+    return (value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value).isoformat()
+
+
+class ConfiguracionDB(db.Model):
+    __tablename__ = "configuracion"
+    clave = db.Column(db.String(80), primary_key=True)
+    valor = db.Column(db.String(240), nullable=False)
+
+
 class UsuarioDB(db.Model):
     __tablename__ = "usuarios"
 
@@ -12,10 +24,12 @@ class UsuarioDB(db.Model):
     email = db.Column(db.String(254), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     rol = db.Column(db.String(20), nullable=False, default="cliente")
+    activo = db.Column(db.Boolean, nullable=False, default=True)
+    session_version = db.Column(db.Integer, nullable=False, default=1)
     creado_en = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
-        return {"id": self.id, "nombre": self.nombre, "email": self.email, "rol": self.rol}
+        return {"id": self.id, "nombre": self.nombre, "email": self.email, "rol": self.rol, "activo": self.activo}
 
 
 class InventarioDB(db.Model):
@@ -70,6 +84,13 @@ class PedidoDB(db.Model):
     listo_en = db.Column(db.DateTime, nullable=True)
     entregado_en = db.Column(db.DateTime, nullable=True)
     pagado_en = db.Column(db.DateTime, nullable=True)
+    usuario_id = db.Column(db.Integer, nullable=True, index=True)
+    invitado_token = db.Column(db.String(80), nullable=True)
+    stock_estado = db.Column(db.String(20), nullable=False, default="pendiente")
+    plan_consumo_json = db.Column(db.Text, nullable=False, default="[]")
+    problema_preparacion = db.Column(db.String(500), nullable=False, default="")
+    anulado_en = db.Column(db.DateTime, nullable=True)
+    motivo_anulacion = db.Column(db.String(500), nullable=False, default="")
 
     def to_dict(self):
         created_at = self.creado_en
@@ -94,10 +115,14 @@ class PedidoDB(db.Model):
             "estado": self.estado,
             "canal": self.canal,
             "creado_en": created_at.isoformat(),
-            "preparacion_inicio_en": self.preparacion_inicio_en.isoformat() if self.preparacion_inicio_en else None,
-            "listo_en": self.listo_en.isoformat() if self.listo_en else None,
-            "entregado_en": self.entregado_en.isoformat() if self.entregado_en else None,
-            "pagado_en": self.pagado_en.isoformat() if self.pagado_en else None,
+            "preparacion_inicio_en": utc_iso(self.preparacion_inicio_en),
+            "listo_en": utc_iso(self.listo_en),
+            "entregado_en": utc_iso(self.entregado_en),
+            "pagado_en": utc_iso(self.pagado_en),
+            "stock_estado": self.stock_estado,
+            "problema_preparacion": self.problema_preparacion,
+            "anulado_en": utc_iso(self.anulado_en),
+            "motivo_anulacion": self.motivo_anulacion,
         }
 
 

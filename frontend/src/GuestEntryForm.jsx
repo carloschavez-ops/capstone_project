@@ -54,9 +54,9 @@ export default function GuestEntryForm({ onSubmit, onBack, busy, error }) {
 
             <fieldset className="delivery-choice">
               <legend>¿Cómo recibes tu pedido?</legend>
-              <div className="delivery-options" role="radiogroup" aria-label="Modalidad del pedido">
+              <div className="delivery-options" role="group" aria-label="Modalidad del pedido">
                 {DELIVERY_OPTIONS.map(({ id, label, icon: Icon }) => (
-                  <button key={id} type="button" role="radio" aria-checked={customer.tipo_entrega === id} className={customer.tipo_entrega === id ? 'selected' : ''} onClick={() => update('tipo_entrega', id)}>
+                  <button key={id} type="button" aria-pressed={customer.tipo_entrega === id} className={customer.tipo_entrega === id ? 'selected' : ''} onClick={() => update('tipo_entrega', id)}>
                     <Icon size={17} /><span>{label}</span>
                   </button>
                 ))}
