@@ -419,6 +419,9 @@ def create_app(database_uri=None, config=None):
         if production and any(check_password_hash(account.password_hash, LEGACY_ADMIN_PASSWORD)
                               for account in UsuarioDB.query.filter_by(rol="admin", activo=True).all()):
             raise RuntimeError("Cambia la contraseña inicial con python -m backend.maintenance set-admin-password antes de producción.")
+        if not database_uri:
+            from backend.staff_bootstrap import ensure_staff_accounts
+            ensure_staff_accounts(instance_dir, app.logger)
 
     app.config["INITIALIZING"] = False
     from backend.security import install_security

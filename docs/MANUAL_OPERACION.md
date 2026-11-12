@@ -22,6 +22,8 @@ En **Reportes**, seleccionar fechas inclusivas y estado. Las fechas se interpret
 
 Las instalaciones locales nuevas generan una contraseña administradora aleatoria en `instance/.admin-password`; no hay una contraseña compartida de desarrollo. Una base existente conserva sus cuentas. Definir las variables privadas de administrador antes del primer arranque permite establecer una contraseña propia. Producción exige 12 caracteres como mínimo y rechaza la credencial inicial antigua.
 
+El arranque también crea un acceso de cocina y otro de caja si falta el rol en la base. Los correos iniciales son `cocina@pizzapronto.test` y `caja@pizzapronto.test`. Si no se suministran claves privadas, se generan por separado en `.cocina-password` y `.caja-password` dentro del directorio de datos. Cada archivo contiene la clave inicial, no una clave cambiada posteriormente. Protege ese directorio y entrega cada acceso por un medio privado. Las cuentas y su estado se conservan entre arranques.
+
 La sesión vence tras 30 minutos sin solicitudes o a las 8 horas desde el ingreso, aunque siga habiendo actividad. La API comprueba estos límites además de la validez de la cookie. Los formularios requieren CSRF y las respuestas de la API no se cachean. Cinco intentos fallidos por cuenta bloquean el acceso durante la ventana de 15 minutos; también existe un límite por dirección de origen. Los identificadores del control de intentos se guardan como HMAC, sin contraseñas. Una cuenta desactivada o cuya credencial cambia pierde sus sesiones anteriores.
 
 ## Uso con teclado y evaluación de facilidad
@@ -71,9 +73,11 @@ Abrir `http://127.0.0.1:5173`. La API escucha en `127.0.0.1:5000`. El depurador 
 | `PIZZA_PRONTO_SECRET_KEY` | Secreto privado de al menos 32 caracteres en producción. No incluir en Git ni en el Word. En desarrollo se genera una clave local persistente en `instance/.session-key`. |
 | `PIZZA_PRONTO_ADMIN_EMAIL` | Correo del administrador inicial. En una instalación nueva, definir el correo real antes de arrancar. |
 | `PIZZA_PRONTO_ADMIN_PASSWORD` | Contraseña para crear al administrador en una instalación productiva nueva o para el comando de cambio de credencial. Mínimo 12 caracteres. No se imprime ni se guarda en código. |
+| `PIZZA_PRONTO_COCINA_EMAIL`, `PIZZA_PRONTO_CAJA_EMAIL` | Correos opcionales para la primera cuenta de cada rol. Si el correo ya pertenece a otra cuenta, usa uno distinto. |
+| `PIZZA_PRONTO_COCINA_PASSWORD`, `PIZZA_PRONTO_CAJA_PASSWORD` | Claves opcionales para la creación inicial. Usar de 12 a 256 caracteres. Si se omiten, se generan claves aleatorias. |
 | `PIZZA_PRONTO_DATA_DIR` | Directorio persistente para SQLite y copias. Predeterminado: `instance` en la raíz. |
 | `PIZZA_PRONTO_UPLOAD_DIR` | Directorio persistente para imágenes subidas. Predeterminado: `backend/uploads`. |
-| `PORT` | Puerto de Waitress, predeterminado `5000`. Solo escucha en la interfaz local. |
+| `PORT` | Puerto de Waitress. En local usa `127.0.0.1:5000` por defecto. En Render escucha en `0.0.0.0` con el puerto que indica la plataforma. |
 
 Las variables se leen del entorno del proceso. El proyecto no carga archivos `.env` automáticamente. Usar las mismas rutas al arrancar el servidor, programar copias y restaurar. Proteger el acceso a esos directorios y al almacén de secretos del servicio.
 
@@ -110,7 +114,7 @@ Antes de actualizar una instalación usada, detener el servicio y conservar una 
 
 ## Cuentas y permisos
 
-Iniciar sesión como administrador y abrir **Panel admin → Personal**. Crear una cuenta individual para cada trabajador, con rol cocina o caja y contraseña de al menos 12 caracteres. Comunicar las credenciales por un medio privado. No compartir la cuenta administradora.
+Iniciar sesión como administrador y abrir **Panel admin → Personal** para administrar los accesos iniciales de cocina y caja o crear cuentas individuales adicionales. Cada cuenta de trabajador usa su propio rol y una contraseña de al menos 12 caracteres. Comunicar las credenciales por un medio privado. No compartir la cuenta administradora.
 
 | Operación | Administración | Cocina | Caja |
 | --- | --- | --- | --- |

@@ -1,5 +1,7 @@
 # Pizza Pronto
 
+Para publicar en Render, sigue la [guía de despliegue](docs/DESPLIEGUE_RENDER.md). El repositorio incluye `render.yaml` para crear el servicio con un disco persistente.
+
 Aplicación de pedidos con frontend React y API Flask. El catálogo, los ingredientes y los pedidos se guardan en SQLite.
 
 ## Estructura
@@ -52,6 +54,16 @@ npm run dev
 Abre la URL que muestra Vite, normalmente `http://127.0.0.1:5173`. Vite redirige las llamadas `/api` al backend en `http://127.0.0.1:5000`.
 
 En una instalación local nueva, el administrador usa `pizzapronto@gmail.com` y una contraseña aleatoria guardada en `instance/.admin-password`. También puedes definir `PIZZA_PRONTO_ADMIN_EMAIL` y `PIZZA_PRONTO_ADMIN_PASSWORD` antes del primer arranque. Las cuentas de una base existente se conservan; producción rechaza la contraseña inicial antigua.
+
+Al arrancar, el sistema también crea las cuentas de cocina y caja si todavía no existen cuentas para esos roles. Inicia sesión desde la misma pantalla con el correo de cada rol. El panel muestra las funciones autorizadas para esa cuenta.
+
+| Rol | Correo inicial | Contraseña inicial |
+| --- | --- | --- |
+| Administración | `pizzapronto@gmail.com` o `PIZZA_PRONTO_ADMIN_EMAIL` | En producción, configura `PIZZA_PRONTO_ADMIN_PASSWORD` antes del primer arranque. En local, se genera si no se configura. |
+| Cocina | `cocina@pizzapronto.test` o `PIZZA_PRONTO_COCINA_EMAIL` | `PIZZA_PRONTO_COCINA_PASSWORD` o una clave aleatoria guardada en `instance/.cocina-password`. |
+| Caja | `caja@pizzapronto.test` o `PIZZA_PRONTO_CAJA_EMAIL` | `PIZZA_PRONTO_CAJA_PASSWORD` o una clave aleatoria guardada en `instance/.caja-password`. |
+
+Los archivos de claves se guardan en el directorio de datos configurado si usas `PIZZA_PRONTO_DATA_DIR`. Las claves configuradas para cocina y caja requieren al menos 12 caracteres. Conserva el directorio de datos fuera del sitio público y con acceso restringido al responsable del servicio. Puedes cambiar las claves desde **Panel admin → Personal**. Un reinicio no cambia credenciales ni reactiva cuentas deshabilitadas.
 
 La carta tiene búsqueda por nombre, categoría, descripción e ingredientes. El panel admin permite crear pizzas con imagen JPG/PNG/WEBP (máximo 5 MB), ingredientes, tipo y precios personal/mediana/familiar. La API expone `POST /api/admin/pizzas` para ese alta. Cocina puede consultar pedidos/stock y marcar pedidos listos; caja puede consultar pedidos y registrar entrega/pago. Las demás funciones administrativas requieren el rol administrador. La receta personalizable ofrece únicamente masa italiana; la normalización inicial se aplica una vez.
 
